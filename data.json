@@ -1,0 +1,36 @@
+{
+  "latest": {
+    "date": "2026-05-17",
+    "price": 2194.0378009817996,
+    "sma120": 2240.74,
+    "ema250": 2618.48,
+    "ratio": 0.8204,
+    "zone": "持有区"
+  },
+  "history": [
+    {
+      "date": "2026-05-17",
+      "price": 2194.0378009817996,
+      "sma120": 2240.74,
+      "ema250": 2618.48,
+      "ratio": 0.8204,
+      "zone": "持有区"
+    }
+  ],
+  "config": {
+    "coin": "ETH",
+    "thresh_allin": 0.35,
+    "thresh_heavy": 0.45,
+    "thresh_dca": 0.65,
+    "thresh_sell": 1.6,
+    "ma_short": 120,
+    "ma_long": 250,
+    "last_update": "2026-05-17 10:48:22"
+  },
+  "zone": {
+    "name": "持有区",
+    "icon": "⬜",
+    "action": "持仓不动，暂停定投",
+    "color": "#7f8c8d"
+  }
+}
