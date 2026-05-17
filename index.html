@@ -81,7 +81,7 @@ const ZONES = [
     { id: 'allin',   name: '梭哈区', icon: '💜', action: '5倍定投，分批重仓买入', color: '#9b59b6', bg: '#f3e8ff' },
     { id: 'heavy',   name: '重仓区', icon: '💚', action: '3倍定投，大幅加仓',    color: '#27ae60', bg: '#e8f8f0' },
     { id: 'dca',     name: '定投区', icon: '💛', action: '1倍定投，正常建仓',    color: '#f39c12', bg: '#fff8e8' },
-    { id: 'hold',    name: '持有区', icon: '⬜', action: '持仓不动，暂停定投',     color: '#7f8c8d', bg: '#f5f5f5' },
+    { id: 'hold',    name: '轻投区', icon: '🔵', action: '0.5倍定投，小额分批',  color: '#3498db', bg: '#e8f4fd' },
     { id: 'sell',    name: '止盈区', icon: '🔴', action: '分批卖出，锁定利润',     color: '#e74c3c', bg: '#fde8e8' },
 ];
 
@@ -133,14 +133,16 @@ function render(data, coin) {
 
     // 区间说明
     const zoneList = document.getElementById('zoneList');
-    zoneList.innerHTML = ZONES.map(z => `
-        <div class="zone-item" style="border-left: 4px solid ${z.color};">
+    const zoneKeys = { allin: 'thresh_allin', heavy: 'thresh_heavy', dca: 'thresh_dca', hold: 'thresh_sell', sell: 'sell' };
+    zoneList.innerHTML = ZONES.map(z => {
+        const maxVal = z.id === 'sell' ? '∞' : config[zoneKeys[z.id]];
+        return `<div class="zone-item" style="border-left: 4px solid ${z.color};">
             <span class="zone-icon">${z.icon}</span>
             <span class="zone-name">${z.name}</span>
-            <span class="zone-range">(< ${z.id === 'sell' ? '∞' : config[`thresh_${z.id === 'allin' ? 'allin' : z.id === 'heavy' ? 'heavy' : z.id === 'dca' ? 'dca' : 'sell'}`]})</span>
+            <span class="zone-range">(< ${maxVal})</span>
             <span class="zone-action">→ ${z.action}</span>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 
     // 趋势图
     if (data.history && data.history.length > 1) {
@@ -170,7 +172,8 @@ function render(data, coin) {
             <span>💜 梭哈 ${config.thresh_allin}</span>
             <span>💚 重仓 ${config.thresh_heavy}</span>
             <span>💛 定投 ${config.thresh_dca}</span>
-            <span>🔴 止盈 ${config.thresh_sell}</span>
+            <span>🔵 轻投 ${config.thresh_sell}</span>
+            <span>🔴 止盈 ∞</span>
         `;
     }
 

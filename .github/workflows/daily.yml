@@ -16,7 +16,7 @@ jobs:
     # 可选：如果 BTC 也要，把下面改为 matrix
     strategy:
       matrix:
-        coin: [ETH]
+        coin: [ETH, BTC]
 
     steps:
       - uses: actions/checkout@v4

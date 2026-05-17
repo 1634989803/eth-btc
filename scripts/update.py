@@ -117,7 +117,7 @@ def get_zone(ratio):
         (0, THRESH_ALLIN, '梭哈区', '💜', '5倍定投，分批重仓买入', '#9b59b6'),
         (THRESH_ALLIN, THRESH_HEAVY, '重仓区', '💚', '3倍定投，大幅加仓', '#27ae60'),
         (THRESH_HEAVY, THRESH_DCA, '定投区', '💛', '1倍定投，正常建仓', '#f39c12'),
-        (THRESH_DCA, THRESH_SELL, '持有区', '⬜', '持仓不动，暂停定投', '#7f8c8d'),
+        (THRESH_DCA, THRESH_SELL, '轻投区', '🔵', '0.5倍定投，小额分批', '#3498db'),
         (THRESH_SELL, float('inf'), '止盈区', '🔴', '分批卖出，锁定利润', '#e74c3c'),
     ]
     for mn, mx, name, icon, action, color in zones:
