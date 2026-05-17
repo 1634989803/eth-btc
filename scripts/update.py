@@ -15,16 +15,25 @@ from datetime import datetime
 # ═══════ 配置（通过环境变量传入） ═══════
 COIN = os.environ.get('COIN', 'ETH')          # ETH 或 BTC
 SYMBOL = COIN + 'USDT'
-MA_SHORT = int(os.environ.get('MA_SHORT', 120))
-MA_LONG = int(os.environ.get('MA_LONG', 250))
-THRESH_ALLIN = float(os.environ.get('THRESH_ALLIN', 0.35))
-THRESH_HEAVY = float(os.environ.get('THRESH_HEAVY', 0.45))
-THRESH_DCA = float(os.environ.get('THRESH_DCA', 0.65))
-THRESH_SELL = float(os.environ.get('THRESH_SELL', 1.60))
+
+def get_env_int(key, default):
+    v = os.environ.get(key, '')
+    return int(v) if v.strip() else default
+
+def get_env_float(key, default):
+    v = os.environ.get(key, '')
+    return float(v) if v.strip() else default
+
+MA_SHORT = get_env_int('MA_SHORT', 120)
+MA_LONG = get_env_int('MA_LONG', 250)
+THRESH_ALLIN = get_env_float('THRESH_ALLIN', 0.35)
+THRESH_HEAVY = get_env_float('THRESH_HEAVY', 0.45)
+THRESH_DCA = get_env_float('THRESH_DCA', 0.65)
+THRESH_SELL = get_env_float('THRESH_SELL', 1.60)
 
 # 邮箱配置
 SMTP_HOST = os.environ.get('SMTP_HOST', '')
-SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
+SMTP_PORT = get_env_int('SMTP_PORT', 587)
 SMTP_USER = os.environ.get('SMTP_USER', '')
 SMTP_PASS = os.environ.get('SMTP_PASS', '')
 EMAIL_TO = os.environ.get('EMAIL_TO', '')
