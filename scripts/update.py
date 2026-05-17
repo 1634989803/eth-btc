@@ -117,28 +117,67 @@ def btc_zones(ratio):
         return ('定投区', '🟢', '正常定投', '#27ae60')
     return ('持有区', '🟡', '暂停买入', '#f39c12')
 
-def send_email(coin, price, indicator, zone_info):
+def load_coin_data(coin):
+    """读取另一个币的数据文件"""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', f'{coin.lower()}_data.json')
+    if os.path.exists(path):
+        with open(path) as f:
+            return json.load(f)
+    return None
+
+def send_combined_email(eth_data, btc_data):
+    """一封邮件发两个币"""
     if not all([SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_TO]):
         print('邮箱没配, 跳过邮件')
-        return
+        return False
     
-    name, icon, action, color = zone_info
-    today = datetime.now().strftime('%Y-%m-%d %A')
-    subj = f'{coin} 定投日报 - {indicator} ({name})'
+    today = datetime.now().strftime('%m-%d')
+    
+    # 趋势箭头
+    def trend(data):
+        h = data.get('history', [])
+        if len(h) >= 2:
+            return '↑' if h[-1]['indicator'] > h[-2]['indicator'] else '↓'
+        return '→'
+    
+    e = eth_data['latest']
+    b = btc_data['latest']
+    et = trend(eth_data)
+    bt = trend(btc_data)
+    
+    subj = f'ETH {e["indicator"]}{et}({e["zone_name"]}) · BTC {b["indicator"]}{bt}({b["zone_name"]}) · {today}'
+    
+    def coin_html(coin, data, trend_arrow):
+        l = data['latest']
+        z = data['zone']
+        return f'''
+        <div style="margin:15px 0;">
+            <div style="font-size:20px;font-weight:bold;margin-bottom:10px;">{coin}</div>
+            <div style="text-align:center;padding:15px;border-radius:8px;background:{z['color']}15;">
+                <div style="font-size:40px;font-weight:bold;color:{z['color']};">{l['indicator']} {trend_arrow}</div>
+                <div style="font-size:18px;color:{z['color']};">{z['icon']} {z['name']}</div>
+                <div style="font-size:14px;color:#666;margin-top:5px;">→ {z['action']}</div>
+            </div>
+            <table style="width:100%;margin-top:10px;border-collapse:collapse;">
+                <tr><td style="padding:6px;color:#888;font-size:13px;">价格</td><td style="padding:6px;text-align:right;font-weight:bold;">${l['price']:,.2f}</td></tr>
+                <tr><td style="padding:6px;color:#888;font-size:13px;">指标</td><td style="padding:6px;text-align:right;font-weight:bold;color:{z['color']};">{l['indicator']}</td></tr>
+                <tr><td style="padding:6px;color:#888;font-size:13px;">区域</td><td style="padding:6px;text-align:right;">{z['icon']} {z['name']}</td></tr>
+            </table>
+        </div>
+        <hr style="border:none;border-top:1px solid #eee;">'''
     
     body = f'''<html><body style="font-family:Microsoft YaHei,Arial;padding:20px;background:#f5f5f5;">
 <div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;">
-<div style="background:#1a1a2e;color:white;padding:20px;text-align:center;">
-    <h2>{coin} 定投日报</h2>
-    <p>{today}</p>
+<div style="background:#1a1a2e;color:white;padding:15px;text-align:center;">
+    <h2 style="margin:0;">定投日报</h2>
+    <p style="margin:5px 0 0;opacity:0.7;font-size:13px;">{datetime.now().strftime("%Y-%m-%d %A")}</p>
 </div>
 <div style="padding:20px;">
-    <div style="text-align:center;padding:20px;background:{color}15;">
-        <div style="font-size:48px;font-weight:bold;color:{color};">{indicator}</div>
-        <div style="font-size:20px;color:{color};">{icon} {name}</div>
-        <div style="font-size:16px;color:#666;">→ {action}</div>
+    {coin_html('ETH', eth_data, et)}
+    {coin_html('BTC', btc_data, bt)}
+    <div style="font-size:12px;color:#999;margin-top:10px;">
+        趋势: ↑涨 ↓跌 →持平 · 数据: OKX/Bybit · 每6小时更新
     </div>
-    <p style="text-align:center;color:#999;">当前价格: ${price:,.2f}</p>
 </div></div></body></html>'''
     
     msg = MIMEMultipart('alternative')
@@ -154,9 +193,11 @@ def send_email(coin, price, indicator, zone_info):
         s.login(SMTP_USER, SMTP_PASS)
         s.sendmail(EMAIL_FROM, [EMAIL_TO], msg.as_string())
         s.quit()
-        print(f'邮件已发到 {EMAIL_TO}')
+        print(f'✅ 邮件已发送: {subj}')
+        return True
     except Exception as e:
-        print(f'邮件发送失败: {e}')
+        print(f'❌ 邮件发送失败: {e}')
+        return False
 
 def main():
     print(f'--- {COIN} {datetime.now().strftime("%Y-%m-%d %H:%M")} ---')
@@ -216,7 +257,14 @@ def main():
         json.dump(existing, f, ensure_ascii=False, indent=2)
     print('data.json 已更新')
     
-    send_email(COIN, price, indicator, zone)
+    # ETH只存数据, BTC存完再发合并邮件
+    if COIN == 'BTC':
+        eth = load_coin_data('ETH')
+        btc = load_coin_data('BTC')
+        if eth and btc:
+            send_combined_email(eth, btc)
+        else:
+            print('ETH或BTC数据不全, 跳过邮件')
 
 if __name__ == '__main__':
     main()
