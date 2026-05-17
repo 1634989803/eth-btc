@@ -65,7 +65,6 @@ getZone(ratio, isBTC) {
         if (ratio < 1.20) return { name:'定投区', mult:1 };
         return { name:'持有区', mult:0 };
     }
-    if (ratio < 0.35) return { name:'梭哈区', mult:5 };
     if (ratio < 0.45) return { name:'重仓区', mult:3 };
     if (ratio < 0.65) return { name:'定投区', mult:1 };
     if (ratio < 1.60) return { name:'轻投区', mult:0.5 };
@@ -157,8 +156,12 @@ async run(opts) {
     const finalPrice = data[data.length - 1].price;
     const finalValue = Math.round(shares * finalPrice);
     const totalReturn = invested > 0 ? ((finalValue - invested) / invested * 100) : 0;
-    const years = (data.length - startIdx) / 365;
-    const annualized = years > 0 ? (Math.pow(1 + totalReturn / 100, 1 / years) - 1) * 100 : 0;
+    const totalMonths = (data.length - startIdx) / 30.44;
+    const years = totalMonths / 12;
+    let annualized = 0;
+    if (years > 0 && totalReturn > -100) {
+        annualized = (Math.pow(1 + totalReturn / 100, 1 / years) - 1) * 100;
+    }
     
     const result = {
         asset: cfg.name,
