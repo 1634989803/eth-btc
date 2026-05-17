@@ -68,3 +68,40 @@ a:hover { text-decoration: underline; }
 .link-item:hover { background: #e8e8e8; text-decoration: none; }
 
 .footer { text-align: center; padding: 20px; font-size: 12px; color: #999; }
+
+/* ─── 面板/Tabs ─── */
+.tabs { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
+.tab {
+    padding: 8px 20px; border: 2px solid #ddd; border-radius: 20px;
+    background: white; cursor: pointer; font-size: 13px; font-weight: 600;
+    transition: all 0.2s; color: #666;
+}
+.tab.active { border-color: #4a6cf7; color: #4a6cf7; background: #f0f3ff; }
+.tab:hover { border-color: #4a6cf7; }
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ─── 回测 ─── */
+.bt-form { max-width: 500px; }
+.bt-form .form-group { margin-bottom: 10px; }
+.bt-form .form-group label { display: block; font-size: 12px; color: #666; margin-bottom: 3px; }
+.bt-form .form-group input,
+.bt-form .form-group select {
+    width: 100%; padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; outline: none;
+}
+.bt-form .form-group input:focus { border-color: #4a6cf7; }
+.bt-form .form-row { display: flex; gap: 10px; }
+.bt-form .form-row .form-group { flex: 1; }
+
+.bench-checks { display: flex; flex-wrap: wrap; gap: 6px; padding: 5px 0; }
+.bench-checks label { font-size: 12px; cursor: pointer; }
+
+.bt-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.bt-stat { text-align: center; padding: 10px; background: #f8f9fa; border-radius: 8px; }
+.bt-label { display: block; font-size: 11px; color: #888; margin-bottom: 4px; }
+.bt-val { display: block; font-size: 16px; font-weight: 700; }
+
+@media (max-width: 500px) {
+    .bt-stats { grid-template-columns: repeat(2, 1fr); }
+    .tabs .tab { padding: 6px 14px; font-size: 12px; }
+}
