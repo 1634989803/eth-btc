@@ -165,7 +165,7 @@ def load_coin_data(coin):
     return None
 
 def send_simple_email(eth_data, btc_data):
-    """一封极简邮件, 标题就看完所有信息"""
+    """定投日报邮件"""
     if not all([SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_TO]):
         print('邮箱没配, 跳过邮件')
         return False
@@ -178,15 +178,46 @@ def send_simple_email(eth_data, btc_data):
     
     e, b = eth_data['latest'], btc_data['latest']
     et, bt = trend(eth_data), trend(btc_data)
-    today = datetime.now().strftime('%m-%d')
+    today = datetime.now().strftime('%Y-%m-%d %A')
+    subj = f'ETH {e["indicator"]}{et}{e["zone_name"]} · BTC {b["indicator"]}{bt}{b["zone_name"]} · {datetime.now().strftime("%m-%d")}'
     
-    subj = f'ETH {e["indicator"]}{et}{e["zone_name"]} · BTC {b["indicator"]}{bt}{b["zone_name"]} · {today}'
-    
-    body = f'''<html><body style="font-family:Microsoft YaHei;padding:15px;">
-ETH: {e["indicator"]} {e["zone_name"]} ${e["price"]:,.0f} {e["zone_action"]}<br>
-BTC: {b["indicator"]} {b["zone_name"]} ${b["price"]:,.0f} {b["zone_action"]}<br>
-<small>{today} · 数据: OKX/Bybit</small>
-</body></html>'''
+    body = f'''<html><body style="font-family:Microsoft YaHei,Arial;padding:20px;background:#f5f5f5;">
+<div style="max-width:500px;margin:0 auto;background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.1);">
+<div style="background:#1a1a2e;color:white;padding:15px;text-align:center;">
+    <h2 style="margin:0;font-size:18px;">📊 定投日报</h2>
+    <p style="margin:3px 0 0;opacity:0.6;font-size:12px;">{today}</p>
+</div>
+<div style="padding:15px;">
+    <table style="width:100%;border-collapse:collapse;">
+    <tr style="background:#f8f9fa;">
+        <td style="padding:12px;text-align:center;border-radius:8px 0 0 8px;">
+            <div style="font-size:11px;color:#888;">ETH</div>
+            <div style="font-size:24px;font-weight:bold;color:#3498db;">{e["indicator"]}{et}</div>
+            <div style="font-size:12px;color:{'#27ae60' if e['zone_name'] in ['轻投区','定投区','重仓区','梭哈区'] else '#e74c3c'};">{e["zone_name"]}</div>
+            <div style="font-size:11px;color:#666;">${e["price"]:,.0f}</div>
+        </td>
+        <td style="padding:12px;text-align:center;border-radius:0 8px 8px 0;">
+            <div style="font-size:11px;color:#888;">BTC</div>
+            <div style="font-size:24px;font-weight:bold;color:#27ae60;">{b["indicator"]}{bt}</div>
+            <div style="font-size:12px;color:{'#27ae60' if b['zone_name'] in ['定投区','抄底区'] else '#f39c12'};">{b["zone_name"]}</div>
+            <div style="font-size:11px;color:#666;">${b["price"]:,.0f}</div>
+        </td>
+    </tr>
+    </table>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+        <div style="flex:1;padding:8px;background:#f0f3ff;border-radius:6px;text-align:center;">
+            <div style="font-size:10px;color:#888;">ETH 操作</div>
+            <div style="font-size:12px;font-weight:600;">{e["zone_action"]}</div>
+        </div>
+        <div style="flex:1;padding:8px;background:#f0f3ff;border-radius:6px;text-align:center;">
+            <div style="font-size:10px;color:#888;">BTC 操作</div>
+            <div style="font-size:12px;font-weight:600;">{b["zone_action"]}</div>
+        </div>
+    </div>
+    <div style="text-align:center;font-size:10px;color:#bbb;margin-top:10px;">
+        数据来源: OKX/Bybit · {datetime.now().strftime("%H:%M")}更新
+    </div>
+</div></div></body></html>'''
     
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subj
