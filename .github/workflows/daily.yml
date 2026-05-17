@@ -11,21 +11,33 @@ permissions:
 jobs:
   update:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        coin: [ETH, BTC]
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: 装 Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: 跑指标
+      - name: ETH 指标
         env:
-          COIN: ${{ matrix.coin }}
+          COIN: ETH
+          MA_SHORT: 120
+          MA_LONG: 250
+          THRESH_ALLIN: 0.35
+          THRESH_HEAVY: 0.45
+          THRESH_DCA: 0.65
+          THRESH_SELL: 1.60
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+        run: python scripts/update.py
+
+      - name: BTC 指标
+        env:
+          COIN: BTC
           MA_SHORT: 120
           MA_LONG: 250
           THRESH_ALLIN: 0.35
@@ -45,5 +57,6 @@ jobs:
           git config user.name "bot"
           git config user.email "bot@users.noreply.github.com"
           git add *_data.json
-          git diff --staged --quiet || git commit -m "${{ matrix.coin }} 指标更新 ($(date +'%m-%d %H:%M'))"
+          git diff --staged --quiet || git commit -m "指标更新 $(date +'%m-%d %H:%M')"
+          git pull --rebase
           git push
