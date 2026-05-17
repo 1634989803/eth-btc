@@ -27,7 +27,7 @@ SMTP_PORT = env_int('SMTP_PORT', 587)
 SMTP_USER = os.environ.get('SMTP_USER', '')
 SMTP_PASS = os.environ.get('SMTP_PASS', '')
 EMAIL_TO = os.environ.get('EMAIL_TO', '')
-EMAIL_FROM = os.environ.get('EMAIL_FROM', SMTP_USER)
+EMAIL_FROM = os.environ.get('EMAIL_FROM', '') or SMTP_USER
 
 DATA_FILE = f'{COIN.lower()}_data.json'
 
