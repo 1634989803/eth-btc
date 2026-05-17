@@ -71,13 +71,15 @@
     <!-- ═══ 面板: 回测 ═══ -->
     <div id="panel-backtest" class="panel">
         <div class="card">
-            <h3>🔬 定投回测</h3>
+            <h3>🔬 多资产回测对比</h3>
             <div class="bt-form">
                 <div class="form-row">
-                    <div class="form-group">
-                        <label>资产</label>
-                        <select id="btAsset"></select>
+                    <div class="form-group" style="flex:2;">
+                        <label>选择要对比的资产 (可多选)</label>
+                        <div id="btAssets" class="bench-checks"></div>
                     </div>
+                </div>
+                <div class="form-row">
                     <div class="form-group">
                         <label>策略</label>
                         <select id="btStrategy">
@@ -86,42 +88,31 @@
                             <option value="lump">📥 一次性投入</option>
                         </select>
                     </div>
-                </div>
-                <div class="form-row">
                     <div class="form-group">
-                        <label>每期金额 (USD/CNY)</label>
+                        <label>每期金额</label>
                         <input type="number" id="btAmount" value="1000" min="100">
                     </div>
                     <div class="form-group">
-                        <label>含分红再投</label>
-                        <select id="btDiv">
-                            <option value="1">是</option>
-                            <option value="0">否</option>
-                        </select>
+                        <label>含分红</label>
+                        <select id="btDiv"><option value="1">是</option><option value="0">否</option></select>
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>开始</label>
+                        <label>开始日期</label>
                         <input type="date" id="btStart" value="2023-01-01">
                     </div>
                     <div class="form-group">
-                        <label>结束</label>
+                        <label>结束日期</label>
                         <input type="date" id="btEnd">
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>对比标的 (可多选)</label>
-                        <div class="bench-checks" id="benchChecks"></div>
-                    </div>
-                </div>
-                <button class="btn btn-primary" onclick="runBacktest()">🚀 开始回测</button>
+                <button class="btn btn-primary" onclick="runBacktest()">🚀 开始对比</button>
             </div>
         </div>
 
         <div id="btResults" style="display:none;">
-            <div class="card bt-summary" id="btSummary"></div>
+            <div class="card" style="overflow-x:auto;" id="btSummary"></div>
             <div class="card"><canvas id="btChart" height="280"></canvas></div>
         </div>
     </div>
@@ -311,95 +302,102 @@ async function switchKline(coin) {
     initKline(coin);
 }
 
-// ═══════════════════ 回测 v2 ═══════════════════
+// ═══════════════════ 回测 v3 (多选) ═══════════════════
 async function initBacktest() {
-    const today = new Date().toISOString().slice(0,10);
-    document.getElementById('btEnd').value = today;
-    document.getElementById('btEnd').max = today;
+    document.getElementById('btEnd').value = new Date().toISOString().slice(0,10);
     
-    // 填充资产下拉
-    const sel = document.getElementById('btAsset');
-    sel.innerHTML = '';
-    for (const [k, v] of Object.entries(BT.assets)) {
-        const opt = document.createElement('option');
-        opt.value = k; opt.textContent = v.name;
-        sel.appendChild(opt);
-    }
-    
-    // 填充对比标的
-    const div = document.getElementById('benchChecks');
+    // 全部资产显示为复选框
+    const div = document.getElementById('btAssets');
     div.innerHTML = '';
+    const colors = ['#2962FF','#e74c3c','#27ae60','#f39c12','#9b59b6','#3498db'];
+    let i = 0;
     for (const [k, v] of Object.entries(BT.assets)) {
-        if (k === 'ETH' || k === 'BTC') continue; // 主资产不选自己
         const label = document.createElement('label');
-        label.style.cssText = 'margin-right:10px;font-size:12px;cursor:pointer;';
-        label.innerHTML = `<input type="checkbox" value="${k}"> ${v.name}`;
+        label.style.cssText = `display:inline-flex;align-items:center;gap:4px;margin:4px 8px 4px 0;padding:4px 10px;border-radius:6px;font-size:13px;cursor:pointer;background:${colors[i % colors.length]}15;color:${colors[i % colors.length]};`;
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.value = k;
+        if (k === 'ETH' || k === 'BTC') cb.checked = true;
+        label.prepend(cb);
+        label.appendChild(document.createTextNode(' ' + v.name));
         div.appendChild(label);
+        i++;
     }
 }
 
 async function runBacktest() {
-    const asset = document.getElementById('btAsset').value;
+    const checks = document.querySelectorAll('#btAssets input:checked');
+    const assets = Array.from(checks).map(c => c.value);
+    if (assets.length === 0) { alert('请至少选一个资产'); return; }
+    
     const strategy = document.getElementById('btStrategy').value;
     const monthly = +document.getElementById('btAmount').value;
     const startDate = document.getElementById('btStart').value;
     const endDate = document.getElementById('btEnd').value;
     const includeDiv = document.getElementById('btDiv').value === '1';
-    const checks = document.querySelectorAll('#benchChecks input:checked');
-    const benchmarks = Array.from(checks).map(c => c.value);
     
     const btn = document.querySelector('#panel-backtest .btn');
     btn.textContent = '⏳ 计算中...'; btn.disabled = true;
     
     try {
-        const result = await BT.run({ asset, strategy, monthly, startDate, endDate, benchmarks, includeDiv });
-        showBtResult(result);
+        const results = await Promise.all(assets.map(asset =>
+            BT.run({ asset, strategy, monthly, startDate, endDate, benchmarks: [], includeDiv })
+        ));
+        showBtResults(results, strategy);
     } catch(e) {
         document.getElementById('btSummary').innerHTML = `<p style="color:red;padding:10px;">❌ ${e.message}</p>`;
         document.getElementById('btResults').style.display = 'block';
     }
     
-    btn.textContent = '🚀 开始回测'; btn.disabled = false;
+    btn.textContent = '🚀 开始对比'; btn.disabled = false;
 }
 
-function showBtResult(r) {
+function showBtResults(results, strategy) {
     document.getElementById('btResults').style.display = 'block';
     
-    // 主资产结果
-    let stats = `
-    <div class="bt-stats">
-        <div class="bt-stat"><span class="bt-label">${r.asset}</span><span class="bt-val" style="color:${r.totalReturn>=0?'#27ae60':'#e74c3c'};">${r.totalReturn>0?'+':''}${r.totalReturn}%</span><span style="font-size:11px;color:#888;">总收益</span></div>
-        <div class="bt-stat"><span class="bt-label">${r.strategy}</span><span class="bt-val">${r.annualizedReturn>0?'+':''}${r.annualizedReturn}%</span><span style="font-size:11px;color:#888;">年化</span></div>
-        <div class="bt-stat"><span class="bt-label">最大回撤</span><span class="bt-val" style="color:#e74c3c;">-${r.maxDrawdown}%</span></div>
-        <div class="bt-stat"><span class="bt-label">总投入</span><span class="bt-val">${fmt(r.totalInvested)}</span></div>
-        <div class="bt-stat"><span class="bt-label">终值</span><span class="bt-val" style="color:#27ae60;">${fmt(r.finalValue)}</span></div>
-        <div class="bt-stat"><span class="bt-label">${r.startDate} ~ ${r.endDate}</span><span class="bt-val" style="font-size:14px;">${r.months}个月</span></div>
-    </div>`;
+    // 表格: 所有资产并列对比
+    let table = '<table class="data-table"><tr><th>资产</th><th>总收益</th><th>年化</th><th>最大回撤</th><th>总投入</th><th>终值</th><th>周期</th></tr>';
+    const colors = ['#2962FF','#e74c3c','#27ae60','#f39c12','#9b59b6','#3498db'];
     
-    // 对比表
-    if (r.comparisons.length) {
-        stats += '<table class="data-table" style="margin-top:10px;"><tr><th>对比</th><th>策略</th><th>总收益</th><th>终值</th></tr>';
-        r.comparisons.forEach(c => {
-            const better = c.totalReturn > r.totalReturn;
-            stats += `<tr><td>${c.name}</td><td>普通定投</td><td style="color:${better?'#e74c3c':'#27ae60'};font-weight:bold;">${c.totalReturn>0?'+':''}${c.totalReturn}%</td><td>${fmt(c.finalValue)}</td></tr>`;
-        });
-        stats += '</table>';
-    }
+    results.forEach((r, i) => {
+        const better = r.totalReturn > 0;
+        table += `<tr>
+            <td style="font-weight:600;color:${colors[i]};">${r.asset}</td>
+            <td style="color:${better?'#27ae60':'#e74c3c'};font-weight:bold;">${r.totalReturn>0?'+':''}${r.totalReturn}%</td>
+            <td>${r.annualizedReturn>0?'+':''}${r.annualizedReturn}%</td>
+            <td style="color:#e74c3c;">-${r.maxDrawdown}%</td>
+            <td>${fmt(r.totalInvested)}</td>
+            <td style="color:#27ae60;">${fmt(r.finalValue)}</td>
+            <td style="font-size:12px;">${r.startDate}~${r.endDate}</td>
+        </tr>`;
+    });
+    table += '</table>';
     
-    document.getElementById('btSummary').innerHTML = stats;
+    // 策略说明
+    const strategyNames = { indicator: '指标DCA', regular: '普通定投', lump: '一次性投入' };
+    table = `<p style="font-size:13px;color:#888;margin-bottom:8px;">策略: ${strategyNames[strategy]} · 每期 $${document.getElementById('btAmount').value}</p>` + table;
     
-    // 资金曲线
+    document.getElementById('btSummary').innerHTML = table;
+    
+    // 资金曲线 (所有资产画一起)
     if (btChartInstance) btChartInstance.destroy();
     const ctx = document.getElementById('btChart').getContext('2d');
+    
+    // 找最长的曲线
+    const maxLen = Math.max(...results.map(r => r.curve.length));
+    const labels = results.find(r => r.curve.length === maxLen).curve.map(d => d.date.slice(5));
+    
+    const datasets = results.map((r, i) => ({
+        label: r.asset, data: r.curve.map(d => d.value),
+        borderColor: colors[i], tension: 0.3, fill: false, pointRadius: 0,
+    }));
+    datasets.push({
+        label: '总投入', data: results[0].curve.map(d => d.invested),
+        borderColor: '#999', borderDash: [5,5], tension: 0.3, fill: false, pointRadius: 0,
+    });
+    
     btChartInstance = new Chart(ctx, {
         type: 'line',
-        data: {
-            labels: r.curve.map(d => d.date.slice(5)),
-            datasets: [
-                { label: r.asset, data: r.curve.map(d => d.value), borderColor: '#2962FF', tension: 0.3, fill: false },
-                { label: '总投入', data: r.curve.map(d => d.invested), borderColor: '#999', borderDash: [5,5], tension: 0.3, fill: false },
-            ]
-        },
+        data: { labels, datasets },
         options: {
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: {size: 11} } } },
