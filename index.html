@@ -236,39 +236,17 @@ async function initKline(coin) {
         const data = await r.json();
         const ohlc = data.map(k => ({ time: Math.floor(k[0]/1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4] }));
         
-        // 计算指标值 (ETH/BTC分开)
+        // 用 BT.calcIndicator 计算（和指标面板一致）
         const prices = ohlc.map(d => d.close);
         const indicators = [];
         const isBTC = coin === 'BTC';
         
-        for (let i = isBTC ? 250 : 250; i < prices.length; i++) {
+        for (let i = 250; i < prices.length; i++) {
             const sub = prices.slice(0, i + 1);
-            
-            let ratio;
-            if (isBTC) {
-                // BTC AHR999: (price / SMA200) * (price / 指数回归)
-                const sma200 = sub.slice(-200).reduce((a,b) => a+b, 0) / 200;
-                const n = sub.length;
-                const x = [...Array(n).keys()];
-                const y = sub.map(p => Math.log(p));
-                const ax = x.reduce((a,b) => a+b, 0) / n;
-                const ay = y.reduce((a,b) => a+b, 0) / n;
-                const num = x.reduce((s, xi, idx) => s + (xi - ax) * (y[idx] - ay), 0);
-                const den = x.reduce((s, xi) => s + (xi - ax) ** 2, 0);
-                const a = den ? num / den : 0;
-                const bCoeff = ay - a * ax;
-                const expVal = Math.exp(a * (n - 1) + bCoeff);
-                ratio = (sub[sub.length-1] / sma200) * (sub[sub.length-1] / expVal);
-            } else {
-                // ETH: (price / SMA120) * (price / EMA250)
-                const sma120 = sub.slice(-120).reduce((a,b) => a+b, 0) / 120;
-                const k = 2 / 251;
-                let ema250 = sub.slice(-250).reduce((a,b) => a+b, 0) / 250;
-                for (let j = sub.length - 250; j < sub.length; j++) ema250 = (sub[j] - ema250) * k + ema250;
-                ratio = (sub[sub.length-1] / sma120) * (sub[sub.length-1] / ema250);
+            const ratio = BT.calcIndicator(sub, isBTC);
+            if (ratio !== null) {
+                indicators.push({ time: ohlc[i].time, value: Math.round(ratio * 10000) / 10000 });
             }
-            
-            indicators.push({ time: ohlc[i].time, value: Math.round(ratio * 10000) / 10000 });
         }
         
         // 顶部: K线图
