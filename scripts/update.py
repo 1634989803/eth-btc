@@ -29,8 +29,9 @@ SMTP_PASS = os.environ.get('SMTP_PASS', '')
 EMAIL_TO = os.environ.get('EMAIL_TO', '')
 EMAIL_FROM = os.environ.get('EMAIL_FROM', '') or SMTP_USER
 
-# PushPlus 微信推送
-PUSHPLUS_TOKEN = os.environ.get('PUSHPLUS_TOKEN', '')
+# WxPusher 微信推送 (免费)
+WXPUSHER_TOKEN = os.environ.get('WXPUSHER_TOKEN', '')
+WXPUSHER_UID = os.environ.get('WXPUSHER_UID', '')
 
 DATA_FILE = f'{COIN.lower()}_data.json'
 
@@ -120,35 +121,38 @@ def btc_zones(ratio):
         return ('定投区', '🟢', '正常定投', '#27ae60')
     return ('持有区', '🟡', '暂停买入', '#f39c12')
 
-def push_wechat(eth_data, btc_data):
-    """推送到微信 (PushPlus)"""
-    if not PUSHPLUS_TOKEN:
+def push_wxpusher(eth_data, btc_data):
+    """推送到微信 (WxPusher, 免费无认证)"""
+    token = os.environ.get('WXPUSHER_TOKEN', '')
+    uid = os.environ.get('WXPUSHER_UID', '')
+    if not token or not uid:
         return
     
     e = eth_data['latest']
     b = btc_data['latest']
     
-    # 微信内容要简洁, 用纯文本
-    content = f'''ETH: {e['indicator']} {e['zone_name']} ${e['price']:,.0f}
-BTC: {b['indicator']} {b['zone_name']} ${b['price']:,.0f}
-{e['zone_action']} | {b['zone_action']}'''
+    now = datetime.now().strftime('%m-%d')
+    content = f'''ETH: {e['indicator']} {e['zone_name']} ${e['price']:,.0f} {e['zone_action']}
+BTC: {b['indicator']} {b['zone_name']} ${b['price']:,.0f} {b['zone_action']}
+数据: OKX/Bybit · {now}'''
     
     data = json.dumps({
-        'token': PUSHPLUS_TOKEN,
-        'title': f'定投日报 {datetime.now().strftime("%m-%d")}',
+        'appToken': token,
         'content': content,
-        'template': 'txt',
+        'summary': f'ETH {e["indicator"]} · BTC {b["indicator"]}',
+        'contentType': 2,
+        'uids': [uid],
     }).encode()
     
     try:
-        req = urllib.request.Request('https://www.pushplus.plus/send', data=data,
-            headers={'Content-Type': 'application/json'})
+        req = urllib.request.Request('https://wxpusher.zjiecode.com/api/send/message',
+            data=data, headers={'Content-Type': 'application/json'})
         with urllib.request.urlopen(req, timeout=10) as r:
             resp = json.loads(r.read())
-            if resp.get('code') == 200:
+            if resp.get('code') == 1000:
                 print('✅ 微信已推送')
             else:
-                print(f'❌ 微信推送失败: {resp.get("msg", "未知")}')
+                print(f'❌ 微信推送失败: {resp}')
     except Exception as e:
         print(f'❌ 微信推送失败: {e}')
 
@@ -160,60 +164,29 @@ def load_coin_data(coin):
             return json.load(f)
     return None
 
-def send_combined_email(eth_data, btc_data):
-    """一封邮件发两个币"""
+def send_simple_email(eth_data, btc_data):
+    """一封极简邮件, 标题就看完所有信息"""
     if not all([SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_TO]):
         print('邮箱没配, 跳过邮件')
         return False
     
-    today = datetime.now().strftime('%m-%d')
-    
-    # 趋势箭头
     def trend(data):
         h = data.get('history', [])
         if len(h) >= 2:
             return '↑' if h[-1]['indicator'] > h[-2]['indicator'] else '↓'
         return '→'
     
-    e = eth_data['latest']
-    b = btc_data['latest']
-    et = trend(eth_data)
-    bt = trend(btc_data)
+    e, b = eth_data['latest'], btc_data['latest']
+    et, bt = trend(eth_data), trend(btc_data)
+    today = datetime.now().strftime('%m-%d')
     
-    subj = f'ETH {e["indicator"]}{et}({e["zone_name"]}) · BTC {b["indicator"]}{bt}({b["zone_name"]}) · {today}'
+    subj = f'ETH {e["indicator"]}{et}{e["zone_name"]} · BTC {b["indicator"]}{bt}{b["zone_name"]} · {today}'
     
-    def coin_html(coin, data, trend_arrow):
-        l = data['latest']
-        z = data['zone']
-        return f'''
-        <div style="margin:15px 0;">
-            <div style="font-size:20px;font-weight:bold;margin-bottom:10px;">{coin}</div>
-            <div style="text-align:center;padding:15px;border-radius:8px;background:{z['color']}15;">
-                <div style="font-size:40px;font-weight:bold;color:{z['color']};">{l['indicator']} {trend_arrow}</div>
-                <div style="font-size:18px;color:{z['color']};">{z['icon']} {z['name']}</div>
-                <div style="font-size:14px;color:#666;margin-top:5px;">→ {z['action']}</div>
-            </div>
-            <table style="width:100%;margin-top:10px;border-collapse:collapse;">
-                <tr><td style="padding:6px;color:#888;font-size:13px;">价格</td><td style="padding:6px;text-align:right;font-weight:bold;">${l['price']:,.2f}</td></tr>
-                <tr><td style="padding:6px;color:#888;font-size:13px;">指标</td><td style="padding:6px;text-align:right;font-weight:bold;color:{z['color']};">{l['indicator']}</td></tr>
-                <tr><td style="padding:6px;color:#888;font-size:13px;">区域</td><td style="padding:6px;text-align:right;">{z['icon']} {z['name']}</td></tr>
-            </table>
-        </div>
-        <hr style="border:none;border-top:1px solid #eee;">'''
-    
-    body = f'''<html><body style="font-family:Microsoft YaHei,Arial;padding:20px;background:#f5f5f5;">
-<div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;">
-<div style="background:#1a1a2e;color:white;padding:15px;text-align:center;">
-    <h2 style="margin:0;">定投日报</h2>
-    <p style="margin:5px 0 0;opacity:0.7;font-size:13px;">{datetime.now().strftime("%Y-%m-%d %A")}</p>
-</div>
-<div style="padding:20px;">
-    {coin_html('ETH', eth_data, et)}
-    {coin_html('BTC', btc_data, bt)}
-    <div style="font-size:12px;color:#999;margin-top:10px;">
-        趋势: ↑涨 ↓跌 →持平 · 数据: OKX/Bybit · 每6小时更新
-    </div>
-</div></div></body></html>'''
+    body = f'''<html><body style="font-family:Microsoft YaHei;padding:15px;">
+ETH: {e["indicator"]} {e["zone_name"]} ${e["price"]:,.0f} {e["zone_action"]}<br>
+BTC: {b["indicator"]} {b["zone_name"]} ${b["price"]:,.0f} {b["zone_action"]}<br>
+<small>{today} · 数据: OKX/Bybit</small>
+</body></html>'''
     
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subj
@@ -297,8 +270,8 @@ def main():
         eth = load_coin_data('ETH')
         btc = load_coin_data('BTC')
         if eth and btc:
-            send_combined_email(eth, btc)
-            push_wechat(eth, btc)
+            send_simple_email(eth, btc)
+            push_wxpusher(eth, btc)
         else:
             print('ETH或BTC数据不全, 跳过邮件和微信')
 
