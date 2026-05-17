@@ -29,6 +29,9 @@ SMTP_PASS = os.environ.get('SMTP_PASS', '')
 EMAIL_TO = os.environ.get('EMAIL_TO', '')
 EMAIL_FROM = os.environ.get('EMAIL_FROM', '') or SMTP_USER
 
+# PushPlus 微信推送
+PUSHPLUS_TOKEN = os.environ.get('PUSHPLUS_TOKEN', '')
+
 DATA_FILE = f'{COIN.lower()}_data.json'
 
 def fetch_prices():
@@ -116,6 +119,38 @@ def btc_zones(ratio):
     if ratio < 1.2:
         return ('定投区', '🟢', '正常定投', '#27ae60')
     return ('持有区', '🟡', '暂停买入', '#f39c12')
+
+def push_wechat(eth_data, btc_data):
+    """推送到微信 (PushPlus)"""
+    if not PUSHPLUS_TOKEN:
+        return
+    
+    e = eth_data['latest']
+    b = btc_data['latest']
+    
+    # 微信内容要简洁, 用纯文本
+    content = f'''ETH: {e['indicator']} {e['zone_name']} ${e['price']:,.0f}
+BTC: {b['indicator']} {b['zone_name']} ${b['price']:,.0f}
+{e['zone_action']} | {b['zone_action']}'''
+    
+    data = json.dumps({
+        'token': PUSHPLUS_TOKEN,
+        'title': f'定投日报 {datetime.now().strftime("%m-%d")}',
+        'content': content,
+        'template': 'txt',
+    }).encode()
+    
+    try:
+        req = urllib.request.Request('https://www.pushplus.plus/send', data=data,
+            headers={'Content-Type': 'application/json'})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            resp = json.loads(r.read())
+            if resp.get('code') == 200:
+                print('✅ 微信已推送')
+            else:
+                print(f'❌ 微信推送失败: {resp.get("msg", "未知")}')
+    except Exception as e:
+        print(f'❌ 微信推送失败: {e}')
 
 def load_coin_data(coin):
     """读取另一个币的数据文件"""
@@ -263,8 +298,9 @@ def main():
         btc = load_coin_data('BTC')
         if eth and btc:
             send_combined_email(eth, btc)
+            push_wechat(eth, btc)
         else:
-            print('ETH或BTC数据不全, 跳过邮件')
+            print('ETH或BTC数据不全, 跳过邮件和微信')
 
 if __name__ == '__main__':
     main()
