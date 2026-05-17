@@ -44,13 +44,52 @@ DATA_DIR = os.path.dirname(os.path.abspath(__file__)) + '/..'
 
 
 def fetch_klines(symbol, interval='1d', limit=260):
-    """从币安获取K线数据"""
-    url = f'https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}'
-    req = urllib.request.Request(url)
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        data = json.loads(resp.read())
-    prices = [float(k[4]) for k in data]  # 收盘价
-    return prices
+    """获取K线数据（多源备选）"""
+    errors = []
+    
+    # 源1: CoinGecko (最通用，GitHub Actions可用)
+    try:
+        coin_id = 'ethereum' if 'ETH' in symbol else 'bitcoin'
+        days = limit
+        url = f'https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days={days}'
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        prices = [p[1] for p in data['prices']]
+        if prices:
+            print(f'✅ 数据源: CoinGecko ({len(prices)} 条)')
+            return prices
+    except Exception as e:
+        errors.append(f'CoinGecko: {e}')
+    
+    # 源2: Binance (备选)
+    try:
+        url = f'https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}'
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        prices = [float(k[4]) for k in data]
+        if prices:
+            print(f'✅ 数据源: Binance ({len(prices)} 条)')
+            return prices
+    except Exception as e:
+        errors.append(f'Binance: {e}')
+    
+    # 源3: CoinCap (最后备选)
+    try:
+        asset = 'ethereum' if 'ETH' in symbol else 'bitcoin'
+        url = f'https://api.coincap.io/v2/assets/{asset}/history?interval=d1&limit={limit}'
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        prices = [float(d['priceUsd']) for d in data['data']]
+        if prices:
+            print(f'✅ 数据源: CoinCap ({len(prices)} 条)')
+            return prices
+    except Exception as e:
+        errors.append(f'CoinCap: {e}')
+    
+    raise Exception(f'所有数据源均失败: {"; ".join(errors)}')
 
 
 def calc_sma(prices, period):
