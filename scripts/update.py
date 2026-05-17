@@ -32,35 +32,34 @@ EMAIL_FROM = os.environ.get('EMAIL_FROM', SMTP_USER)
 DATA_FILE = f'{COIN.lower()}_data.json'
 
 def fetch_prices():
-    """拿行情数据, 先试CoinGecko再试别的"""
     coin_id = 'ethereum' if 'ETH' in SYMBOL else 'bitcoin'
-    days = max(MA_LONG + 10, 400)  # AHR999需要更多数据
+    days = max(MA_LONG + 10, 400)
+    errs = []
     
-    # CoinGecko
-    try:
-        url = f'https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days={days}'
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=15) as r:
-            data = json.loads(r.read())
-        prices = [p[1] for p in data['prices']]
-        if prices:
-            return prices
-    except:
-        pass
+    srcs = [
+        (f'CoinGecko', f'https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days={days}',
+         lambda d: [p[1] for p in d['prices']]),
+        (f'Binance', f'https://api.binance.com/api/v3/klines?symbol={SYMBOL}&interval=1d&limit={days}',
+         lambda d: [float(k[4]) for k in d]),
+        (f'Bybit', f'https://api.bybit.com/v5/market/kline?category=spot&symbol={SYMBOL}&interval=D&limit={days}',
+         lambda d: [float(k[4]) for k in d['result']['list']]),
+        (f'OKX', f'https://www.okx.com/api/v5/market/history-candles?instId={SYMBOL}&bar=1Dutc&limit={days}',
+         lambda d: [float(k[4]) for k in d['data']]),
+    ]
     
-    # Binance 备选
-    try:
-        url = f'https://api.binance.com/api/v3/klines?symbol={SYMBOL}&interval=1d&limit={days}'
-        req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=15) as r:
-            data = json.loads(r.read())
-        prices = [float(k[4]) for k in data]
-        if prices:
-            return prices
-    except:
-        pass
+    for name, url, parser in srcs:
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = json.loads(r.read())
+            prices = parser(data)
+            if prices and len(prices) > 200:
+                print(f'数据源: {name} ({len(prices)} 条)')
+                return prices
+        except Exception as e:
+            errs.append(f'{name}: {e}')
     
-    raise Exception('数据源都挂了')
+    raise Exception(f'所有数据源都挂了: {"; ".join(errs)}')
 
 def calc_sma(prices, n):
     return sum(prices[-n:]) / n if len(prices) >= n else 0
