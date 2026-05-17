@@ -33,6 +33,24 @@ EMAIL_FROM = os.environ.get('EMAIL_FROM', '') or SMTP_USER
 WXPUSHER_TOKEN = os.environ.get('WXPUSHER_TOKEN', '')
 WXPUSHER_UID = os.environ.get('WXPUSHER_UID', '')
 
+# 读取 settings.json (开关和发送时间)
+SETTINGS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'settings.json')
+EMAIL_ENABLED = True
+EMAIL_TIME = '12:45'
+try:
+    with open(SETTINGS_PATH) as f:
+        s = json.load(f)
+        EMAIL_ENABLED = s.get('email_enabled', True)
+        EMAIL_TIME = s.get('email_time', '12:45')
+except:
+    pass
+
+# 如果不是设定的时间, 跳过邮件和微信 (允许15分钟误差)
+now = datetime.now()
+target_h, target_m = map(int, EMAIL_TIME.split(':'))
+time_ok = abs(now.hour * 60 + now.minute - (target_h * 60 + target_m)) <= 15
+SHOULD_NOTIFY = EMAIL_ENABLED and time_ok
+
 DATA_FILE = f'{COIN.lower()}_data.json'
 
 def fetch_prices():
@@ -301,10 +319,14 @@ def main():
         eth = load_coin_data('ETH')
         btc = load_coin_data('BTC')
         if eth and btc:
-            send_simple_email(eth, btc)
-            push_wxpusher(eth, btc)
+            if SHOULD_NOTIFY:
+                send_simple_email(eth, btc)
+                push_wxpusher(eth, btc)
+            else:
+                t = EMAIL_TIME
+                print(f'通知已关闭或不在发送时间(设定{t}), 跳过邮件和微信')
         else:
-            print('ETH或BTC数据不全, 跳过邮件和微信')
+            print('ETH或BTC数据不全, 跳过')
 
 if __name__ == '__main__':
     main()
