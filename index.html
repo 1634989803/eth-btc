@@ -3,181 +3,389 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BTC/ETH 定投指标</title>
+<title>定投指标 · BTC/ETH</title>
 <link rel="stylesheet" href="style.css">
+<!-- 图表库 -->
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
 <div class="container">
+    <!-- 头部 -->
     <header class="header">
         <h1>📊 定投指标</h1>
-        <p class="subtitle">BTC AHR999 · ETH 阶梯定投</p>
-        <div class="coin-tabs">
-            <button class="coin-tab active" onclick="switchCoin('ETH')">ETH 以太坊</button>
-            <button class="coin-tab" onclick="switchCoin('BTC')">BTC 比特币</button>
+        <p class="subtitle">ETH 阶梯定投 · BTC AHR999</p>
+        <div class="tabs" id="mainTabs">
+            <button class="tab active" data-panel="indicator">📊 指标</button>
+            <button class="tab" data-panel="chart">📈 K线</button>
+            <button class="tab" data-panel="backtest">🔬 回测</button>
         </div>
     </header>
 
-    <div class="card" id="loading">
-        <p style="text-align:center;padding:40px;color:#999;">加载中...</p>
+    <!-- ═══ 面板: 指标 ═══ -->
+    <div id="panel-indicator" class="panel active">
+        <div class="coin-tabs">
+            <button class="coin-tab active" onclick="switchCoin('ETH')">ETH</button>
+            <button class="coin-tab" onclick="switchCoin('BTC')">BTC</button>
+        </div>
+        <div class="card" id="loading"><p style="text-align:center;padding:30px;color:#999;">加载中...</p></div>
+
+        <div class="card main-card" id="mainCard" style="display:none;">
+            <div class="ratio-display" id="indicatorDisplay">--</div>
+            <div class="zone-display" id="zoneDisplay">--</div>
+            <div class="action-text" id="actionText">--</div>
+            <div class="price-info" id="priceInfo">--</div>
+        </div>
+
+        <div class="card" id="detailCard" style="display:none;">
+            <table class="data-table" id="dataTable"></table>
+        </div>
+
+        <div class="card">
+            <h3>区间说明</h3>
+            <div id="zoneList"></div>
+        </div>
+
+        <div class="card" id="chartCard-sm" style="display:none;">
+            <h3>近 <span id="chartDays">--</span> 天走势</h3>
+            <div class="chart-bars" id="chartBars"></div>
+        </div>
     </div>
 
-    <div class="card main-card" id="mainCard" style="display:none;">
-        <div class="coin-badge" id="coinBadge">ETH</div>
-        <div class="ratio-display" id="indicatorDisplay">--</div>
-        <div class="zone-display" id="zoneDisplay">--</div>
-        <div class="action-text" id="actionText">--</div>
-        <div class="price-info" id="priceInfo">--</div>
+    <!-- ═══ 面板: K线 ═══ -->
+    <div id="panel-chart" class="panel">
+        <div class="coin-tabs">
+            <button class="coin-tab active" onclick="switchKline('ETH')">ETH</button>
+            <button class="coin-tab" onclick="switchKline('BTC')">BTC</button>
+        </div>
+        <div class="card">
+            <h3>📈 <span id="klineTitle">ETH/USDT</span> 日线 + 定投区间</h3>
+            <div id="klineChart" style="width:100%;height:450px;"></div>
+            <p style="text-align:center;font-size:12px;color:#999;margin-top:5px;">
+                🟣梭HA &lt;0.35 &nbsp; 🟢重仓 &lt;0.45 &nbsp; 🟡定投 &lt;0.65 &nbsp; 🔵轻投 &lt;1.60 &nbsp; 🔴止盈 &gt;1.60
+            </p>
+        </div>
     </div>
 
-    <div class="card" id="detailCard" style="display:none;">
-        <h3>详细数据</h3>
-        <table class="data-table" id="dataTable"></table>
-    </div>
+    <!-- ═══ 面板: 回测 ═══ -->
+    <div id="panel-backtest" class="panel">
+        <div class="card">
+            <h3>🔬 DCA 策略回测</h3>
+            <div class="bt-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>币种</label>
+                        <select id="btCoin"><option>ETH</option><option>BTC</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>每月定投 (USD)</label>
+                        <input type="number" id="btAmount" value="1000" min="100">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>开始日期</label>
+                        <input type="date" id="btStart" value="2023-01-01">
+                    </div>
+                    <div class="form-group">
+                        <label>结束日期</label>
+                        <input type="date" id="btEnd">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>对比标的</label>
+                        <div class="bench-checks" id="benchChecks"></div>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="runBacktest()">🚀 开始回测</button>
+            </div>
+        </div>
 
-    <div class="card">
-        <h3>区间说明</h3>
-        <div id="zoneList"></div>
-    </div>
-
-    <div class="card" id="chartCard" style="display:none;">
-        <h3>近 <span id="chartDays">--</span> 天走势</h3>
-        <div class="chart-bars" id="chartBars"></div>
+        <div id="btResults" style="display:none;">
+            <div class="card bt-summary" id="btSummary"></div>
+            <div class="card"><canvas id="btChart" height="250"></canvas></div>
+        </div>
     </div>
 
     <footer class="footer">
-        <p>数据: CoinGecko · 每6小时更新 · 仅供参考</p>
+        <p>数据: Binance · CoinGecko · 每6小时更新 · 不构成投资建议</p>
     </footer>
 </div>
 
+<script src="backtest.js"></script>
 <script>
+// ═══════════════════ 全局数据 ═══════════════════
 let allData = {};
+let klineCharts = {};
+let btChartInstance = null;
 
+// ═══════════════════ 面板切换 ═══════════════════
+document.querySelectorAll('#mainTabs .tab').forEach(tab => {
+    tab.onclick = () => {
+        document.querySelectorAll('#mainTabs .tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+        
+        if (tab.dataset.panel === 'chart') initKline('ETH');
+        if (tab.dataset.panel === 'backtest') initBacktest();
+    };
+});
+
+// ═══════════════════ 指标面板 ═══════════════════
 const ETH_ZONES = [
-    { min: 0, max: 0.35, name: '梭哈区', icon: '💜', action: '5倍定投, 重仓买入', color: '#9b59b6', bg: '#f3e8ff' },
-    { min: 0.35, max: 0.45, name: '重仓区', icon: '💚', action: '3倍定投, 大幅加仓', color: '#27ae60', bg: '#e8f8f0' },
-    { min: 0.45, max: 0.65, name: '定投区', icon: '💛', action: '1倍定投, 正常节奏', color: '#f39c12', bg: '#fff8e8' },
-    { min: 0.65, max: 1.60, name: '轻投区', icon: '🔵', action: '0.5倍定投, 小额分批', color: '#3498db', bg: '#e8f4fd' },
-    { min: 1.60, max: Infinity, name: '止盈区', icon: '🔴', action: '分批卖出', color: '#e74c3c', bg: '#fde8e8' },
+    { id:'allin', min:0, max:0.35, name:'梭哈区', icon:'💜', action:'5倍定投', color:'#9b59b6', bg:'#f3e8ff' },
+    { id:'heavy', min:0.35, max:0.45, name:'重仓区', icon:'💚', action:'3倍定投', color:'#27ae60', bg:'#e8f8f0' },
+    { id:'dca', min:0.45, max:0.65, name:'定投区', icon:'💛', action:'1倍定投', color:'#f39c12', bg:'#fff8e8' },
+    { id:'light', min:0.65, max:1.60, name:'轻投区', icon:'🔵', action:'0.5倍定投', color:'#3498db', bg:'#e8f4fd' },
+    { id:'sell', min:1.60, max:Infinity, name:'止盈区', icon:'🔴', action:'分批卖出', color:'#e74c3c', bg:'#fde8e8' },
 ];
-
 const BTC_ZONES = [
-    { min: 0, max: 0.45, name: '抄底区', icon: '🟣', action: '适合抄底', color: '#9b59b6', bg: '#f3e8ff' },
-    { min: 0.45, max: 1.20, name: '定投区', icon: '🟢', action: '正常定投', color: '#27ae60', bg: '#e8f8f0' },
-    { min: 1.20, max: Infinity, name: '持有区', icon: '🟡', action: '暂停买入', color: '#f39c12', bg: '#fff8e8' },
+    { id:'bottom', min:0, max:0.45, name:'抄底区', icon:'🟣', action:'适合抄底', color:'#9b59b6', bg:'#f3e8ff' },
+    { id:'dca'   , min:0.45, max:1.20, name:'定投区', icon:'🟢', action:'正常定投', color:'#27ae60', bg:'#e8f8f0' },
+    { id:'hold'  , min:1.20, max:Infinity, name:'持有区', icon:'🟡', action:'暂停买入', color:'#f39c12', bg:'#fff8e8' },
 ];
 
-function getZones(coin) {
-    return coin === 'BTC' ? BTC_ZONES : ETH_ZONES;
-}
-
-function getZone(coin, indicator) {
-    return getZones(coin).find(z => indicator >= z.min && indicator < z.max) || getZones(coin)[getZones(coin).length - 1];
-}
-
-async function fetchLivePrice(coin) {
-    try {
-        const id = coin === 'ETH' ? 'ethereum' : 'bitcoin';
-        const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`);
-        const d = await r.json();
-        return d[id]?.usd;
-    } catch { return null; }
-}
+function getZones(coin) { return coin === 'BTC' ? BTC_ZONES : ETH_ZONES; }
+function getZone(coin, v) { return (coin === 'BTC' ? BTC_ZONES : ETH_ZONES).find(z => v >= z.min && v < z.max) || ETH_ZONES[4]; }
 
 async function switchCoin(coin) {
     document.querySelectorAll('.coin-tab').forEach(t => t.classList.remove('active'));
     document.querySelector(`.coin-tab[onclick*="${coin}"]`).classList.add('active');
     
-    document.getElementById('loading').style.display = 'block';
-    document.getElementById('loading').innerHTML = '<p style="text-align:center;padding:40px;color:#999;">加载中...</p>';
-    document.getElementById('mainCard').style.display = 'none';
-    document.getElementById('detailCard').style.display = 'none';
-    document.getElementById('chartCard').style.display = 'none';
+    ['mainCard','detailCard','chartCard-sm'].forEach(id => document.getElementById(id).style.display = 'none');
+    const ld = document.getElementById('loading'); ld.style.display = 'block'; ld.innerHTML = '<p style="text-align:center;padding:30px;color:#999;">加载中...</p>';
     
-    // 从 data.json 拿历史数据
-    const coinData = allData[coin];
-    if (!coinData) {
-        document.getElementById('loading').innerHTML = '<p style="text-align:center;padding:40px;color:#999;">暂无数据</p>';
-        return;
-    }
+    const data = allData[coin];
+    if (!data) { ld.innerHTML = '<p style="text-align:center;padding:30px;color:#999;">暂无数据</p>'; return; }
     
-    const latest = coinData.latest;
-    const history = coinData.history || [];
-    const zone = getZone(coin, latest.indicator);
+    const l = data.latest;
+    const h = data.history || [];
+    const z = getZone(coin, l.indicator);
     
-    // 同时拿实时价格
-    const livePrice = await fetchLivePrice(coin);
-    const displayPrice = livePrice || latest.price;
-    
-    document.getElementById('loading').style.display = 'none';
+    ld.style.display = 'none';
     document.getElementById('mainCard').style.display = 'block';
     document.getElementById('detailCard').style.display = 'block';
     
     const mc = document.getElementById('mainCard');
-    mc.style.borderTop = `4px solid ${zone.color}`;
-    document.getElementById('coinBadge').textContent = coin;
-    document.getElementById('indicatorDisplay').textContent = latest.indicator;
-    document.getElementById('indicatorDisplay').style.color = zone.color;
-    document.getElementById('zoneDisplay').textContent = zone.icon + ' ' + zone.name;
-    document.getElementById('zoneDisplay').style.background = zone.bg;
-    document.getElementById('zoneDisplay').style.color = zone.color;
-    document.getElementById('actionText').textContent = '→ ' + zone.action;
-    const liveTag = livePrice ? ' (实时)' : '';
-    document.getElementById('priceInfo').innerHTML = `价格: $${Number(displayPrice).toLocaleString()}${liveTag} · 更新: ${latest.date}`;
+    mc.style.borderTop = '4px solid ' + z.color;
+    document.getElementById('indicatorDisplay').textContent = l.indicator;
+    document.getElementById('indicatorDisplay').style.color = z.color;
+    document.getElementById('zoneDisplay').textContent = z.icon + ' ' + z.name;
+    document.getElementById('zoneDisplay').style.background = z.bg;
+    document.getElementById('zoneDisplay').style.color = z.color;
+    document.getElementById('actionText').textContent = '→ ' + z.action;
+    document.getElementById('priceInfo').innerHTML = `$${Number(l.price).toLocaleString()} · ${l.date}`;
     
-    // 详细数据
     const tbl = document.getElementById('dataTable');
-    let rows = `<tr><td>指标值</td><td class="value" style="color:${zone.color};font-weight:bold;">${latest.indicator}</td></tr>`;
-    rows += `<tr><td>当前区域</td><td class="value">${zone.icon} ${zone.name}</td></tr>`;
-    rows += `<tr><td>策略</td><td class="value">${zone.action}</td></tr>`;
-    rows += `<tr><td>价格</td><td class="value">$${Number(latest.price).toLocaleString()}</td></tr>`;
-    if (livePrice) {
-        rows += `<tr><td>实时价格</td><td class="value" style="color:#27ae60;">$${Number(livePrice).toLocaleString()}</td></tr>`;
-    }
-    tbl.innerHTML = rows;
+    tbl.innerHTML = `<tr><td>指标值</td><td class="value" style="color:${z.color};font-weight:bold;">${l.indicator}</td></tr>
+        <tr><td>区域</td><td class="value">${z.icon} ${z.name}</td></tr>
+        <tr><td>策略</td><td class="value">${z.action}</td></tr>
+        <tr><td>价格</td><td class="value">$${Number(l.price).toLocaleString()}</td></tr>`;
     
-    // 区间说明
     document.getElementById('zoneList').innerHTML = getZones(coin).map(z =>
         `<div class="zone-item" style="border-left:4px solid ${z.color};">
-            <span>${z.icon}</span>
-            <span style="font-weight:600;min-width:50px;">${z.name}</span>
-            <span style="color:#999;font-size:12px;">(< ${z.max === Infinity ? '∞' : z.max})</span>
+            <span>${z.icon}</span><span style="font-weight:600;min-width:50px;">${z.name}</span>
+            <span style="color:#999;font-size:12px;">(< ${z.max===Infinity?'∞':z.max})</span>
             <span style="margin-left:auto;color:#666;">→ ${z.action}</span>
-        </div>`
-    ).join('');
+        </div>`).join('');
     
-    // 走势图
-    if (history.length > 1) {
-        document.getElementById('chartCard').style.display = 'block';
-        document.getElementById('chartDays').textContent = history.length;
-        const vals = history.map(h => h.indicator);
-        const minV = Math.min(...vals);
-        const maxV = Math.max(...vals);
-        const range = maxV - minV || 1;
-        
-        document.getElementById('chartBars').innerHTML = history.map((h, i) => {
-            const z = getZone(coin, h.indicator);
-            const ht = ((h.indicator - minV) / range) * 100;
-            const label = (i % 5 === 0 || i === history.length - 1) ? `<div style="font-size:10px;color:#999;margin-top:4px;transform:rotate(-45deg);white-space:nowrap;">${h.date.slice(5)}</div>` : '';
-            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end;" title="${h.date}: ${h.indicator}">
-                <div style="width:100%;border-radius:3px 3px 0 0;min-height:4px;height:${Math.max(ht,5)}%;background:${z.color};"></div>
-                ${label}
-            </div>`;
+    if (h.length > 1) {
+        document.getElementById('chartCard-sm').style.display = 'block';
+        document.getElementById('chartDays').textContent = h.length;
+        const vals = h.map(d => d.indicator);
+        const mn = Math.min(...vals), mx = Math.max(...vals), r = mx - mn || 1;
+        document.getElementById('chartBars').innerHTML = h.map((d, i) => {
+            const z2 = getZone(coin, d.indicator);
+            const ht = ((d.indicator - mn) / r) * 100;
+            const lb = (i % 5 === 0 || i === h.length-1) ? `<div style="font-size:10px;color:#999;margin-top:4px;transform:rotate(-45deg);white-space:nowrap;">${d.date.slice(5)}</div>` : '';
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end;" title="${d.date}: ${d.indicator}">
+                <div style="width:100%;border-radius:3px 3px 0 0;min-height:4px;height:${Math.max(ht,5)}%;background:${z2.color};"></div>${lb}</div>`;
         }).join('');
     }
 }
 
+// ═══════════════════ K线图 ═══════════════════
+async function initKline(coin) {
+    document.getElementById('klineTitle').textContent = coin + '/USDT 日线 + 定投区间';
+    const container = document.getElementById('klineChart');
+    if (klineCharts[coin]) return;
+    
+    try {
+        const r = await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=1d&limit=500`);
+        const data = await r.json();
+        const ohlc = data.map(k => ({ time: Math.floor(k[0]/1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4] }));
+        
+        const chart = LightweightCharts.createChart(container, {
+            height: 450, layout: { textColor: '#333', background: { color: '#fff' } },
+            grid: { vertLines: { color: '#f0f0f0' }, horzLines: { color: '#f0f0f0' } },
+            crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+            timeScale: { timeVisible: false },
+        });
+        
+        // K线
+        chart.addCandlestickSeries().setData(ohlc);
+        
+        // 指标线（计算每日指标值）
+        const prices = ohlc.map(d => d.close);
+        const indicators = [];
+        for (let i = 249; i < prices.length; i++) {
+            const sma = prices.slice(i-119, i+1).reduce((a,b)=>a+b,0) / 120;
+            const ema = (() => {
+                const k = 2/251;
+                let e = prices.slice(i-249, i+1).reduce((a,b)=>a+b,0) / 250;
+                for (let j = 250; j <= i; j++) e = (prices[j] - e) * k + e;
+                return e;
+            })();
+            const ratio = (prices[i] / sma) * (prices[i] / ema);
+            indicators.push({ time: ohlc[i].time, value: ratio });
+        }
+        
+        // 叠加指标线
+        const lineSeries = chart.addLineSeries({ color: '#2962FF', lineWidth: 2 });
+        lineSeries.setData(indicators.map(d => ({ time: d.time, value: d.value * 10000 })));
+        
+        // 参考线 (在右侧标注)
+        const levels = coin === 'BTC'
+            ? [{p:0.45,c:'#9b59b6',t:'抄底'},{p:1.20,c:'#27ae60',t:'定投'}]
+            : [{p:0.35,c:'#9b59b6',t:'梭HA'},{p:0.45,c:'#27ae60',t:'重仓'},{p:0.65,c:'#f39c12',t:'定投'},{p:1.60,c:'#e74c3c',t:'止盈'}];
+        
+        levels.forEach(lv => {
+            lineSeries.createPriceLine({ price: lv.p * 10000, color: lv.c, title: lv.t, lineWidth: 1, lineStyle: 2 });
+        });
+        
+        chart.timeScale().fitContent();
+        klineCharts[coin] = chart;
+    } catch(e) {
+        container.innerHTML = `<p style="text-align:center;padding:40px;color:#999;">❌ K线加载失败: ${e.message}</p>`;
+    }
+}
+
+let klineCoin = 'ETH';
+async function switchKline(coin) {
+    document.querySelectorAll('#panel-chart .coin-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`#panel-chart .coin-tab[onclick*="${coin}"]`).classList.add('active');
+    klineCoin = coin;
+    if (klineCharts[coin]) {
+        document.getElementById('klineChart').innerHTML = '';
+        klineCharts[coin].remove();
+        delete klineCharts[coin];
+    }
+    initKline(coin);
+}
+
+// ═══════════════════ 回测 ═══════════════════
+async function initBacktest() {
+    const today = new Date().toISOString().slice(0,10);
+    document.getElementById('btEnd').value = today;
+    document.getElementById('btEnd').max = today;
+    
+    // 加载基准列表
+    const benchDiv = document.getElementById('benchChecks');
+    benchDiv.innerHTML = '';
+    for (const [k, v] of Object.entries(BACKTEST.benches)) {
+        const label = document.createElement('label');
+        label.style.marginRight = '12px';
+        label.style.fontSize = '13px';
+        label.innerHTML = `<input type="checkbox" value="${k}"> ${v.name}`;
+        benchDiv.appendChild(label);
+    }
+}
+
+async function runBacktest() {
+    const coin = document.getElementById('btCoin').value;
+    const amount = +document.getElementById('btAmount').value;
+    const start = document.getElementById('btStart').value;
+    const end = document.getElementById('btEnd').value;
+    
+    const checks = document.querySelectorAll('#benchChecks input:checked');
+    const benchmarks = Array.from(checks).map(c => c.value);
+    
+    const btn = document.querySelector('#panel-backtest .btn');
+    btn.textContent = '⏳ 计算中...'; btn.disabled = true;
+    
+    try {
+        const result = await BACKTEST.run({ coin, monthlyAmount: amount, startDate: start, endDate: end, compareBenchmarks: benchmarks });
+        showBacktestResult(result);
+    } catch(e) {
+        document.getElementById('btSummary').innerHTML = `<p style="color:red;">❌ ${e.message}</p>`;
+        document.getElementById('btResults').style.display = 'block';
+    }
+    
+    btn.textContent = '🚀 开始回测'; btn.disabled = false;
+}
+
+function showBacktestResult(r) {
+    document.getElementById('btResults').style.display = 'block';
+    
+    let benchRows = '';
+    if (r.benchmarks.length) {
+        benchRows = '<tr><th>对比标的</th><th>总收益</th><th>终值</th></tr>';
+        r.benchmarks.forEach(b => {
+            const color = b.totalReturn > r.totalReturn ? '#e74c3c' : '#27ae60';
+            benchRows += `<tr><td>${b.name}</td><td style="color:${color};">${b.totalReturn > 0 ? '+' : ''}${b.totalReturn}%</td>
+                <td>$${b.finalValue.toLocaleString()}</td></tr>`;
+        });
+    }
+    
+    const tableRows = r.benchmarks.length ? benchRows : '';
+    const diff = r.benchmarks.length ? r.benchmarks.map(b => ({
+        name: b.name, diff: (r.totalReturn - b.totalReturn).toFixed(2)
+    })) : [];
+    
+    const summary = document.getElementById('btSummary');
+    summary.innerHTML = `
+        <div class="bt-stats">
+            <div class="bt-stat"><span class="bt-label">${r.coin} 总收益</span><span class="bt-val" style="color:${r.totalReturn >= 0 ? '#27ae60' : '#e74c3c'};">${r.totalReturn > 0 ? '+' : ''}${r.totalReturn}%</span></div>
+            <div class="bt-stat"><span class="bt-label">年化收益</span><span class="bt-val">${r.annualizedReturn > 0 ? '+' : ''}${r.annualizedReturn}%</span></div>
+            <div class="bt-stat"><span class="bt-label">最大回撤</span><span class="bt-val" style="color:#e74c3c;">-${r.maxDrawdown}%</span></div>
+            <div class="bt-stat"><span class="bt-label">总投入</span><span class="bt-val">$${r.totalInvested.toLocaleString()}</span></div>
+            <div class="bt-stat"><span class="bt-label">最终价值</span><span class="bt-val" style="color:#27ae60;">$${r.finalValue.toLocaleString()}</span></div>
+            <div class="bt-stat"><span class="bt-label">周期</span><span class="bt-val">${r.dateRange.start} ~ ${r.dateRange.end}</span></div>
+        </div>
+        ${tableRows ? '<table class="data-table" style="margin-top:10px;">' + tableRows + '</table>' : ''}`;
+    
+    // 资金曲线图
+    if (btChartInstance) btChartInstance.destroy();
+    const ctx = document.getElementById('btChart').getContext('2d');
+    btChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: r.equityCurve.map(d => d.date.slice(5)),
+            datasets: [
+                { label: r.coin + ' 定投价值', data: r.equityCurve.map(d => d.value),
+                    borderColor: '#2962FF', tension: 0.3, fill: false },
+                { label: '总投入', data: r.equityCurve.map(d => d.invested),
+                    borderColor: '#999', borderDash: [5,5], tension: 0.3, fill: false },
+                ...r.benchmarks.map((b, i) => ({
+                    label: b.name, data: null, // 简化的对比
+                    borderColor: ['#e74c3c','#27ae60','#f39c12'][i],
+                    borderDash: [3,3], tension: 0.3, fill: false,
+                })),
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: {size: 11} } } },
+            scales: { y: { ticks: { callback: v => '$' + v.toLocaleString() } } }
+        }
+    });
+}
+
+// ═══════════════════ 初始化 ═══════════════════
 (async function() {
     try {
         const [eth, btc] = await Promise.all([
             fetch('eth_data.json?_=' + Date.now()).then(r => r.json()).catch(() => null),
             fetch('btc_data.json?_=' + Date.now()).then(r => r.json()).catch(() => null),
         ]);
-        if (eth) allData['ETH'] = eth;
-        if (btc) allData['BTC'] = btc;
+        if (eth) allData.ETH = eth;
+        if (btc) allData.BTC = btc;
         switchCoin(eth ? 'ETH' : 'BTC');
     } catch(e) {
-        document.getElementById('loading').innerHTML = '<p style="text-align:center;padding:40px;color:#999;">加载失败</p>';
+        document.getElementById('loading').innerHTML = '<p style="text-align:center;padding:30px;color:#999;">加载失败</p>';
     }
 })();
 </script>
