@@ -63,7 +63,7 @@
             <h3>📈 <span id="klineTitle">ETH/USDT</span> 日线 + 定投区间</h3>
             <div id="klineChart" style="width:100%;height:450px;"></div>
             <p style="text-align:center;font-size:12px;color:#999;margin-top:5px;">
-                💜重仓 &lt;0.45 &nbsp; 💚定投 0.45~0.65 &nbsp; 💛轻投 0.65~1.60 &nbsp; 🔴止盈 &gt;1.60
+                <span id="klineLegend">💜重仓 &lt;0.45 💚定投 0.45~0.65 💛轻投 0.65~1.60 🔴止盈 &gt;1.60</span>
             </p>
         </div>
     </div>
@@ -225,6 +225,9 @@ function destroyKline() {
 async function initKline(coin) {
     destroyKline();
     document.getElementById('klineTitle').textContent = coin + '/USDT 日线 + 定投区间';
+    document.getElementById('klineLegend').textContent = coin === 'BTC'
+        ? '🟣抄底 <0.45   🟢定投 0.45~1.20   🟡持有 >1.20'
+        : '💜重仓 <0.45   💚定投 0.45~0.65   💛轻投 0.65~1.60   🔴止盈 >1.60';
     const container = document.getElementById('klineChart');
     container.innerHTML = '<div id="klineTop" style="height:300px;"></div><div id="klineBot" style="height:140px;border-top:1px solid #eee;"></div>';
     
@@ -233,23 +236,18 @@ async function initKline(coin) {
         const data = await r.json();
         const ohlc = data.map(k => ({ time: Math.floor(k[0]/1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4] }));
         
-        // 计算指标值 (ETH指标 / BTC AHR999)
+        // 计算指标值 (ETH/BTC分开)
         const prices = ohlc.map(d => d.close);
         const indicators = [];
         const isBTC = coin === 'BTC';
-        const maShort = 120, maLong = 250;
         
-        for (let i = maLong - 1; i < prices.length; i++) {
+        for (let i = isBTC ? 250 : 250; i < prices.length; i++) {
             const sub = prices.slice(0, i + 1);
-            const sma = sub.slice(-maShort).reduce((a,b) => a+b, 0) / maShort;
-            const k = 2 / (maLong + 1);
-            let emaVal = sub.slice(-maLong).reduce((a,b) => a+b, 0) / maLong;
-            for (let j = sub.length - maLong; j < sub.length; j++) emaVal = (sub[j] - emaVal) * k + emaVal;
             
-            let ratio = (sub[sub.length-1] / sma) * (sub[sub.length-1] / emaVal);
-            
+            let ratio;
             if (isBTC) {
-                // BTC AHR999: 指数回归
+                // BTC AHR999: (price / SMA200) * (price / 指数回归)
+                const sma200 = sub.slice(-200).reduce((a,b) => a+b, 0) / 200;
                 const n = sub.length;
                 const x = [...Array(n).keys()];
                 const y = sub.map(p => Math.log(p));
@@ -260,7 +258,14 @@ async function initKline(coin) {
                 const a = den ? num / den : 0;
                 const bCoeff = ay - a * ax;
                 const expVal = Math.exp(a * (n - 1) + bCoeff);
-                ratio = (sub[sub.length-1] / sma) * (sub[sub.length-1] / expVal);
+                ratio = (sub[sub.length-1] / sma200) * (sub[sub.length-1] / expVal);
+            } else {
+                // ETH: (price / SMA120) * (price / EMA250)
+                const sma120 = sub.slice(-120).reduce((a,b) => a+b, 0) / 120;
+                const k = 2 / 251;
+                let ema250 = sub.slice(-250).reduce((a,b) => a+b, 0) / 250;
+                for (let j = sub.length - 250; j < sub.length; j++) ema250 = (sub[j] - ema250) * k + ema250;
+                ratio = (sub[sub.length-1] / sma120) * (sub[sub.length-1] / ema250);
             }
             
             indicators.push({ time: ohlc[i].time, value: Math.round(ratio * 10000) / 10000 });
@@ -298,7 +303,7 @@ async function initKline(coin) {
         // 参考线 (ETH/BTC)
         const levels = coin === 'BTC'
             ? [{p:0.45, c:'#9b59b6', t:'抄底'}, {p:1.20, c:'#27ae60', t:'定投'}]
-            : [{p:0.45, c:'#9b59b6', t:'重仓'}, {p:0.65, c:'#27ae60', t:'定投'}, {p:1.60, c:'#f39c12', t:'止盈'}];
+            : [{p:0.45, c:'#9b59b6', t:'重仓'}, {p:0.65, c:'#27ae60', t:'定投'}, {p:1.60, c:'#f39c12', t:'轻投'}];
         
         levels.forEach(lv => {
             lineSeries.createPriceLine({ price: lv.p, color: lv.c, title: lv.t, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed });
@@ -382,7 +387,7 @@ function showBtResults(results, strategy) {
         table += `<tr>
             <td style="font-weight:600;color:${colors[i]};">${r.asset}</td>
             <td style="color:${better?'#27ae60':'#e74c3c'};font-weight:bold;">${r.totalReturn>0?'+':''}${r.totalReturn}%</td>
-            <td>${r.annualizedReturn>0?'+':''}${r.annualizedReturn}%</td>
+            <td>${r.annualized>0?'+':''}${r.annualized}%</td>
             <td style="color:#e74c3c;">-${r.maxDrawdown}%</td>
             <td>${fmt(r.totalInvested)}</td>
             <td style="color:#27ae60;">${fmt(r.finalValue)}</td>
