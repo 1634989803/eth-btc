@@ -32,19 +32,18 @@ EMAIL_FROM = os.environ.get('EMAIL_FROM', SMTP_USER)
 DATA_FILE = f'{COIN.lower()}_data.json'
 
 def fetch_prices():
-    coin_id = 'ethereum' if 'ETH' in SYMBOL else 'bitcoin'
-    days = max(MA_LONG + 10, 400)
+    days = min(max(MA_LONG + 10, 250), 365)
     errs = []
     
+    okx_symbol = SYMBOL.replace('USDT', '-USDT')
+    
     srcs = [
-        (f'CoinGecko', f'https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days={days}',
-         lambda d: [p[1] for p in d['prices']]),
-        (f'Binance', f'https://api.binance.com/api/v3/klines?symbol={SYMBOL}&interval=1d&limit={days}',
-         lambda d: [float(k[4]) for k in d]),
+        (f'OKX', f'https://www.okx.com/api/v5/market/history-candles?instId={okx_symbol}&bar=1Dutc&limit={days}',
+         lambda d: [float(k[4]) for k in reversed(d['data'])]),
         (f'Bybit', f'https://api.bybit.com/v5/market/kline?category=spot&symbol={SYMBOL}&interval=D&limit={days}',
          lambda d: [float(k[4]) for k in d['result']['list']]),
-        (f'OKX', f'https://www.okx.com/api/v5/market/history-candles?instId={SYMBOL}&bar=1Dutc&limit={days}',
-         lambda d: [float(k[4]) for k in d['data']]),
+        (f'Binance', f'https://api.binance.com/api/v3/klines?symbol={SYMBOL}&interval=1d&limit={days}',
+         lambda d: [float(k[4]) for k in d]),
     ]
     
     for name, url, parser in srcs:
