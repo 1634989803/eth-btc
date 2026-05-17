@@ -3,221 +3,181 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ETH/BTC 定投指标监控</title>
+<title>BTC/ETH 定投指标</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div class="container">
     <header class="header">
-        <h1>📊 定投指标监控</h1>
-        <p class="subtitle">ETH/BTC 阶梯定投指数 · 每日更新</p>
-        <div class="coin-tabs" id="coinTabs">
-            <button class="coin-tab active" data-coin="ETH">ETH 以太坊</button>
-            <button class="coin-tab" data-coin="BTC">BTC 比特币</button>
+        <h1>📊 定投指标</h1>
+        <p class="subtitle">BTC AHR999 · ETH 阶梯定投</p>
+        <div class="coin-tabs">
+            <button class="coin-tab active" onclick="switchCoin('ETH')">ETH 以太坊</button>
+            <button class="coin-tab" onclick="switchCoin('BTC')">BTC 比特币</button>
         </div>
     </header>
 
-    <!-- 加载状态 -->
     <div class="card" id="loading">
-        <p style="text-align:center;padding:40px;color:#999;">⏳ 加载数据中...</p>
+        <p style="text-align:center;padding:40px;color:#999;">加载中...</p>
     </div>
 
-    <!-- 主指标卡 -->
     <div class="card main-card" id="mainCard" style="display:none;">
         <div class="coin-badge" id="coinBadge">ETH</div>
-        <div class="ratio-display" id="ratioDisplay">--</div>
+        <div class="ratio-display" id="indicatorDisplay">--</div>
         <div class="zone-display" id="zoneDisplay">--</div>
         <div class="action-text" id="actionText">--</div>
         <div class="price-info" id="priceInfo">--</div>
     </div>
 
-    <!-- 详细数据 -->
     <div class="card" id="detailCard" style="display:none;">
-        <h3>📋 详细数据</h3>
-        <table class="data-table" id="dataTable">
-            <tr><td>SMA 120 (中期成本线)</td><td class="value" id="sma120">--</td></tr>
-            <tr><td>EMA 250 (长期估值线)</td><td class="value" id="ema250">--</td></tr>
-            <tr><td>偏离度指数</td><td class="value" id="ratioValue">--</td></tr>
-            <tr><td>当前区域</td><td class="value" id="zoneValue">--</td></tr>
-            <tr><td>更新于</td><td class="value" id="updateTime">--</td></tr>
-        </table>
+        <h3>详细数据</h3>
+        <table class="data-table" id="dataTable"></table>
     </div>
 
-    <!-- 区间说明 -->
     <div class="card">
-        <h3>📖 区间说明</h3>
-        <div class="zone-list" id="zoneList"></div>
+        <h3>区间说明</h3>
+        <div id="zoneList"></div>
     </div>
 
-    <!-- 趋势图 -->
     <div class="card" id="chartCard" style="display:none;">
-        <h3>📈 近 <span id="chartDays">30</span> 天趋势</h3>
-        <div class="chart" id="chart">
-            <div class="chart-bars" id="chartBars"></div>
-            <div class="chart-ref" id="chartRef"></div>
-        </div>
-    </div>
-
-    <!-- 友链 -->
-    <div class="card" id="linksCard" style="display:none;">
-        <h3>🔗 友情链接</h3>
-        <div class="links-list" id="linksList"></div>
+        <h3>近 <span id="chartDays">--</span> 天走势</h3>
+        <div class="chart-bars" id="chartBars"></div>
     </div>
 
     <footer class="footer">
-        <p>数据来源: Binance · 由 GitHub Actions 自动更新 · 不构成投资建议</p>
+        <p>数据: CoinGecko · 每6小时更新 · 仅供参考</p>
     </footer>
 </div>
 
 <script>
-// 数据配置
-const CONFIG = {
-    ETH: { thresh_allin: 0.35, thresh_heavy: 0.45, thresh_dca: 0.65, thresh_sell: 1.60 },
-    BTC: { thresh_allin: 0.35, thresh_heavy: 0.45, thresh_dca: 0.65, thresh_sell: 1.60 },
-};
+let allData = {};
 
-const ZONES = [
-    { id: 'allin',   name: '梭哈区', icon: '💜', action: '5倍定投，分批重仓买入', color: '#9b59b6', bg: '#f3e8ff' },
-    { id: 'heavy',   name: '重仓区', icon: '💚', action: '3倍定投，大幅加仓',    color: '#27ae60', bg: '#e8f8f0' },
-    { id: 'dca',     name: '定投区', icon: '💛', action: '1倍定投，正常建仓',    color: '#f39c12', bg: '#fff8e8' },
-    { id: 'hold',    name: '轻投区', icon: '🔵', action: '0.5倍定投，小额分批',  color: '#3498db', bg: '#e8f4fd' },
-    { id: 'sell',    name: '止盈区', icon: '🔴', action: '分批卖出，锁定利润',     color: '#e74c3c', bg: '#fde8e8' },
+const ETH_ZONES = [
+    { min: 0, max: 0.35, name: '梭哈区', icon: '💜', action: '5倍定投, 重仓买入', color: '#9b59b6', bg: '#f3e8ff' },
+    { min: 0.35, max: 0.45, name: '重仓区', icon: '💚', action: '3倍定投, 大幅加仓', color: '#27ae60', bg: '#e8f8f0' },
+    { min: 0.45, max: 0.65, name: '定投区', icon: '💛', action: '1倍定投, 正常节奏', color: '#f39c12', bg: '#fff8e8' },
+    { min: 0.65, max: 1.60, name: '轻投区', icon: '🔵', action: '0.5倍定投, 小额分批', color: '#3498db', bg: '#e8f4fd' },
+    { min: 1.60, max: Infinity, name: '止盈区', icon: '🔴', action: '分批卖出', color: '#e74c3c', bg: '#fde8e8' },
 ];
 
-function getZone(ratio, config) {
-    if (ratio < config.thresh_allin) return ZONES[0];
-    if (ratio < config.thresh_heavy) return ZONES[1];
-    if (ratio < config.thresh_dca)   return ZONES[2];
-    if (ratio < config.thresh_sell)  return ZONES[3];
-    return ZONES[4];
+const BTC_ZONES = [
+    { min: 0, max: 0.45, name: '抄底区', icon: '🟣', action: '适合抄底', color: '#9b59b6', bg: '#f3e8ff' },
+    { min: 0.45, max: 1.20, name: '定投区', icon: '🟢', action: '正常定投', color: '#27ae60', bg: '#e8f8f0' },
+    { min: 1.20, max: Infinity, name: '持有区', icon: '🟡', action: '暂停买入', color: '#f39c12', bg: '#fff8e8' },
+];
+
+function getZones(coin) {
+    return coin === 'BTC' ? BTC_ZONES : ETH_ZONES;
 }
 
-function formatPrice(n) {
-    return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function getZone(coin, indicator) {
+    return getZones(coin).find(z => indicator >= z.min && indicator < z.max) || getZones(coin)[getZones(coin).length - 1];
 }
 
-function render(data, coin) {
-    if (!data || !data.latest) {
-        document.getElementById('loading').innerHTML = '<p style="text-align:center;padding:40px;color:#999;">❌ 暂无数据，等待首次采集...</p>';
+async function fetchLivePrice(coin) {
+    try {
+        const id = coin === 'ETH' ? 'ethereum' : 'bitcoin';
+        const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`);
+        const d = await r.json();
+        return d[id]?.usd;
+    } catch { return null; }
+}
+
+async function switchCoin(coin) {
+    document.querySelectorAll('.coin-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.coin-tab[onclick*="${coin}"]`).classList.add('active');
+    
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('loading').innerHTML = '<p style="text-align:center;padding:40px;color:#999;">加载中...</p>';
+    document.getElementById('mainCard').style.display = 'none';
+    document.getElementById('detailCard').style.display = 'none';
+    document.getElementById('chartCard').style.display = 'none';
+    
+    // 从 data.json 拿历史数据
+    const coinData = allData[coin];
+    if (!coinData) {
+        document.getElementById('loading').innerHTML = '<p style="text-align:center;padding:40px;color:#999;">暂无数据</p>';
         return;
     }
-
-    const config = CONFIG[coin] || CONFIG.ETH;
-    const latest = data.latest;
-    const zone = getZone(latest.ratio, config);
-
-    // 主卡
+    
+    const latest = coinData.latest;
+    const history = coinData.history || [];
+    const zone = getZone(coin, latest.indicator);
+    
+    // 同时拿实时价格
+    const livePrice = await fetchLivePrice(coin);
+    const displayPrice = livePrice || latest.price;
+    
     document.getElementById('loading').style.display = 'none';
     document.getElementById('mainCard').style.display = 'block';
     document.getElementById('detailCard').style.display = 'block';
-
-    const mainCard = document.getElementById('mainCard');
-    mainCard.style.borderTop = `4px solid ${zone.color}`;
+    
+    const mc = document.getElementById('mainCard');
+    mc.style.borderTop = `4px solid ${zone.color}`;
     document.getElementById('coinBadge').textContent = coin;
-    document.getElementById('ratioDisplay').textContent = latest.ratio;
-    document.getElementById('ratioDisplay').style.color = zone.color;
+    document.getElementById('indicatorDisplay').textContent = latest.indicator;
+    document.getElementById('indicatorDisplay').style.color = zone.color;
     document.getElementById('zoneDisplay').textContent = zone.icon + ' ' + zone.name;
     document.getElementById('zoneDisplay').style.background = zone.bg;
     document.getElementById('zoneDisplay').style.color = zone.color;
     document.getElementById('actionText').textContent = '→ ' + zone.action;
-    document.getElementById('priceInfo').textContent = '当前价格: ' + formatPrice(latest.price) + ' · 更新于 ' + latest.date;
-
+    const liveTag = livePrice ? ' (实时)' : '';
+    document.getElementById('priceInfo').innerHTML = `价格: $${Number(displayPrice).toLocaleString()}${liveTag} · 更新: ${latest.date}`;
+    
     // 详细数据
-    document.getElementById('sma120').textContent = formatPrice(latest.sma120);
-    document.getElementById('ema250').textContent = formatPrice(latest.ema250);
-    document.getElementById('ratioValue').textContent = latest.ratio;
-    document.getElementById('ratioValue').style.color = zone.color;
-    document.getElementById('zoneValue').textContent = zone.icon + ' ' + zone.name;
-    document.getElementById('updateTime').textContent = data.config?.last_update || latest.date;
-
+    const tbl = document.getElementById('dataTable');
+    let rows = `<tr><td>指标值</td><td class="value" style="color:${zone.color};font-weight:bold;">${latest.indicator}</td></tr>`;
+    rows += `<tr><td>当前区域</td><td class="value">${zone.icon} ${zone.name}</td></tr>`;
+    rows += `<tr><td>策略</td><td class="value">${zone.action}</td></tr>`;
+    rows += `<tr><td>价格</td><td class="value">$${Number(latest.price).toLocaleString()}</td></tr>`;
+    if (livePrice) {
+        rows += `<tr><td>实时价格</td><td class="value" style="color:#27ae60;">$${Number(livePrice).toLocaleString()}</td></tr>`;
+    }
+    tbl.innerHTML = rows;
+    
     // 区间说明
-    const zoneList = document.getElementById('zoneList');
-    const zoneKeys = { allin: 'thresh_allin', heavy: 'thresh_heavy', dca: 'thresh_dca', hold: 'thresh_sell', sell: 'sell' };
-    zoneList.innerHTML = ZONES.map(z => {
-        const maxVal = z.id === 'sell' ? '∞' : config[zoneKeys[z.id]];
-        return `<div class="zone-item" style="border-left: 4px solid ${z.color};">
-            <span class="zone-icon">${z.icon}</span>
-            <span class="zone-name">${z.name}</span>
-            <span class="zone-range">(< ${maxVal})</span>
-            <span class="zone-action">→ ${z.action}</span>
-        </div>`;
-    }).join('');
-
-    // 趋势图
-    if (data.history && data.history.length > 1) {
-        const chartCard = document.getElementById('chartCard');
-        chartCard.style.display = 'block';
-        document.getElementById('chartDays').textContent = data.history.length;
-
-        const history = data.history;
-        const ratios = history.map(h => h.ratio);
-        const minR = Math.min(...ratios);
-        const maxR = Math.max(...ratios);
-        const range = maxR - minR || 1;
-
-        const bars = document.getElementById('chartBars');
-        bars.innerHTML = history.map((h, i) => {
-            const z = getZone(h.ratio, config);
-            const ht = ((h.ratio - minR) / range) * 100;
-            const label = (i % 5 === 0 || i === history.length - 1) ? `<div class="bar-label">${h.date.slice(5)}</div>` : '';
-            return `<div class="bar-wrap" title="${h.date}: ${h.ratio}">
-                <div class="bar" style="height:${Math.max(ht, 5)}%;background:${z.color};"></div>
+    document.getElementById('zoneList').innerHTML = getZones(coin).map(z =>
+        `<div class="zone-item" style="border-left:4px solid ${z.color};">
+            <span>${z.icon}</span>
+            <span style="font-weight:600;min-width:50px;">${z.name}</span>
+            <span style="color:#999;font-size:12px;">(< ${z.max === Infinity ? '∞' : z.max})</span>
+            <span style="margin-left:auto;color:#666;">→ ${z.action}</span>
+        </div>`
+    ).join('');
+    
+    // 走势图
+    if (history.length > 1) {
+        document.getElementById('chartCard').style.display = 'block';
+        document.getElementById('chartDays').textContent = history.length;
+        const vals = history.map(h => h.indicator);
+        const minV = Math.min(...vals);
+        const maxV = Math.max(...vals);
+        const range = maxV - minV || 1;
+        
+        document.getElementById('chartBars').innerHTML = history.map((h, i) => {
+            const z = getZone(coin, h.indicator);
+            const ht = ((h.indicator - minV) / range) * 100;
+            const label = (i % 5 === 0 || i === history.length - 1) ? `<div style="font-size:10px;color:#999;margin-top:4px;transform:rotate(-45deg);white-space:nowrap;">${h.date.slice(5)}</div>` : '';
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end;" title="${h.date}: ${h.indicator}">
+                <div style="width:100%;border-radius:3px 3px 0 0;min-height:4px;height:${Math.max(ht,5)}%;background:${z.color};"></div>
                 ${label}
             </div>`;
         }).join('');
-
-        const ref = document.getElementById('chartRef');
-        ref.innerHTML = `
-            <span>💜 梭哈 ${config.thresh_allin}</span>
-            <span>💚 重仓 ${config.thresh_heavy}</span>
-            <span>💛 定投 ${config.thresh_dca}</span>
-            <span>🔵 轻投 ${config.thresh_sell}</span>
-            <span>🔴 止盈 ∞</span>
-        `;
-    }
-
-    // 友链
-    if (data.links && data.links.length > 0) {
-        const linksCard = document.getElementById('linksCard');
-        linksCard.style.display = 'block';
-        document.getElementById('linksList').innerHTML = data.links.map(l =>
-            `<a href="${l.url}" target="_blank" rel="noopener" class="link-item">${l.name}</a>`
-        ).join('');
     }
 }
 
-// 切换币种
-document.querySelectorAll('.coin-tab').forEach(tab => {
-    tab.addEventListener('click', async function() {
-        document.querySelectorAll('.coin-tab').forEach(t => t.classList.remove('active'));
-        this.classList.add('active');
-
-        const coin = this.dataset.coin;
-        const loading = document.getElementById('loading');
-        loading.style.display = 'block';
-        loading.innerHTML = '<p style="text-align:center;padding:40px;color:#999;">⏳ 加载 ' + coin + ' 数据...</p>';
-        document.getElementById('mainCard').style.display = 'none';
-        document.getElementById('detailCard').style.display = 'none';
-
-        try {
-            const resp = await fetch('data.json?_=' + Date.now());
-            const data = await resp.json();
-            render(data, coin);
-        } catch (e) {
-            loading.innerHTML = '<p style="text-align:center;padding:40px;color:#999;">❌ 数据加载失败</p>';
-        }
-    });
-});
-
-// 初始加载
 (async function() {
     try {
-        const resp = await fetch('data.json?_=' + Date.now());
-        const data = await resp.json();
-        render(data, 'ETH');
-    } catch (e) {
-        document.getElementById('loading').innerHTML = '<p style="text-align:center;padding:40px;color:#999;">❌ 数据加载失败，请确保 data.json 存在</p>';
+        const [eth, btc] = await Promise.all([
+            fetch('eth_data.json?_=' + Date.now()).then(r => r.json()).catch(() => null),
+            fetch('btc_data.json?_=' + Date.now()).then(r => r.json()).catch(() => null),
+        ]);
+        if (eth) allData['ETH'] = eth;
+        if (btc) allData['BTC'] = btc;
+        switchCoin(eth ? 'ETH' : 'BTC');
+    } catch(e) {
+        document.getElementById('loading').innerHTML = '<p style="text-align:center;padding:40px;color:#999;">加载失败</p>';
     }
 })();
 </script>

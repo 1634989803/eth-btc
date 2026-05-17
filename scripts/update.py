@@ -1,266 +1,224 @@
-#!/usr/bin/env python3
-"""
-ETH/BTC 阶梯定投指标 - 数据采集脚本
-由 GitHub Actions 每天自动运行
-"""
-
-import json
-import os
-import urllib.request
-import smtplib
+import json, os, urllib.request, smtplib, math
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
-# ═══════ 配置（通过环境变量传入） ═══════
-COIN = os.environ.get('COIN', 'ETH')          # ETH 或 BTC
+def env_int(key, default):
+    v = os.environ.get(key, '').strip()
+    return int(v) if v else default
+
+def env_float(key, default):
+    v = os.environ.get(key, '').strip()
+    return float(v) if v else default
+
+COIN = os.environ.get('COIN', 'ETH')
 SYMBOL = COIN + 'USDT'
 
-def get_env_int(key, default):
-    v = os.environ.get(key, '')
-    return int(v) if v.strip() else default
+MA_SHORT = env_int('MA_SHORT', 120)
+MA_LONG = env_int('MA_LONG', 250)
+T_ALLIN = env_float('THRESH_ALLIN', 0.35)
+T_HEAVY = env_float('THRESH_HEAVY', 0.45)
+T_DCA = env_float('THRESH_DCA', 0.65)
+T_SELL = env_float('THRESH_SELL', 1.60)
 
-def get_env_float(key, default):
-    v = os.environ.get(key, '')
-    return float(v) if v.strip() else default
-
-MA_SHORT = get_env_int('MA_SHORT', 120)
-MA_LONG = get_env_int('MA_LONG', 250)
-THRESH_ALLIN = get_env_float('THRESH_ALLIN', 0.35)
-THRESH_HEAVY = get_env_float('THRESH_HEAVY', 0.45)
-THRESH_DCA = get_env_float('THRESH_DCA', 0.65)
-THRESH_SELL = get_env_float('THRESH_SELL', 1.60)
-
-# 邮箱配置
+# 邮箱
 SMTP_HOST = os.environ.get('SMTP_HOST', '')
-SMTP_PORT = get_env_int('SMTP_PORT', 587)
+SMTP_PORT = env_int('SMTP_PORT', 587)
 SMTP_USER = os.environ.get('SMTP_USER', '')
 SMTP_PASS = os.environ.get('SMTP_PASS', '')
 EMAIL_TO = os.environ.get('EMAIL_TO', '')
 EMAIL_FROM = os.environ.get('EMAIL_FROM', SMTP_USER)
 
-DATA_FILE = 'data.json'
-DATA_DIR = os.path.dirname(os.path.abspath(__file__)) + '/..'
+DATA_FILE = f'{COIN.lower()}_data.json'
 
-
-def fetch_klines(symbol, interval='1d', limit=260):
-    """获取K线数据（多源备选）"""
-    errors = []
+def fetch_prices():
+    """拿行情数据, 先试CoinGecko再试别的"""
+    coin_id = 'ethereum' if 'ETH' in SYMBOL else 'bitcoin'
+    days = max(MA_LONG + 10, 400)  # AHR999需要更多数据
     
-    # 源1: CoinGecko (最通用，GitHub Actions可用)
+    # CoinGecko
     try:
-        coin_id = 'ethereum' if 'ETH' in symbol else 'bitcoin'
-        days = limit
         url = f'https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days={days}'
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read())
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read())
         prices = [p[1] for p in data['prices']]
         if prices:
-            print(f'✅ 数据源: CoinGecko ({len(prices)} 条)')
             return prices
-    except Exception as e:
-        errors.append(f'CoinGecko: {e}')
+    except:
+        pass
     
-    # 源2: Binance (备选)
+    # Binance 备选
     try:
-        url = f'https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}'
+        url = f'https://api.binance.com/api/v3/klines?symbol={SYMBOL}&interval=1d&limit={days}'
         req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read())
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read())
         prices = [float(k[4]) for k in data]
         if prices:
-            print(f'✅ 数据源: Binance ({len(prices)} 条)')
             return prices
-    except Exception as e:
-        errors.append(f'Binance: {e}')
+    except:
+        pass
     
-    # 源3: CoinCap (最后备选)
-    try:
-        asset = 'ethereum' if 'ETH' in symbol else 'bitcoin'
-        url = f'https://api.coincap.io/v2/assets/{asset}/history?interval=d1&limit={limit}'
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read())
-        prices = [float(d['priceUsd']) for d in data['data']]
-        if prices:
-            print(f'✅ 数据源: CoinCap ({len(prices)} 条)')
-            return prices
-    except Exception as e:
-        errors.append(f'CoinCap: {e}')
-    
-    raise Exception(f'所有数据源均失败: {"; ".join(errors)}')
+    raise Exception('数据源都挂了')
 
+def calc_sma(prices, n):
+    return sum(prices[-n:]) / n if len(prices) >= n else 0
 
-def calc_sma(prices, period):
-    """计算 SMA"""
-    if len(prices) < period:
+def calc_ema(prices, n):
+    if len(prices) < n:
         return 0
-    return sum(prices[-period:]) / period
-
-
-def calc_ema(prices, period):
-    """计算 EMA"""
-    if len(prices) < period:
-        return 0
-    multiplier = 2 / (period + 1)
-    ema = calc_sma(prices, period)
-    start = len(prices) - period
-    for i in range(start, len(prices)):
-        ema = (prices[i] - ema) * multiplier + ema
+    k = 2 / (n + 1)
+    ema = calc_sma(prices, n)
+    for i in range(len(prices) - n, len(prices)):
+        ema = (prices[i] - ema) * k + ema
     return ema
 
+def calc_exp_regression(prices):
+    """指数回归: ln(price) = a * x + b, 算出估值线"""
+    n = len(prices)
+    if n < 2:
+        return 0
+    x_vals = list(range(n))
+    y_vals = [math.log(p) for p in prices]
+    avg_x = sum(x_vals) / n
+    avg_y = sum(y_vals) / n
+    num = sum((x - avg_x) * (y - avg_y) for x, y in zip(x_vals, y_vals))
+    den = sum((x - avg_x) ** 2 for x in x_vals)
+    a = num / den if den else 0
+    b = avg_y - a * avg_x
+    return math.exp(a * (n - 1) + b)
 
-def get_zone(ratio):
-    """判断阶梯"""
-    zones = [
-        (0, THRESH_ALLIN, '梭哈区', '💜', '5倍定投，分批重仓买入', '#9b59b6'),
-        (THRESH_ALLIN, THRESH_HEAVY, '重仓区', '💚', '3倍定投，大幅加仓', '#27ae60'),
-        (THRESH_HEAVY, THRESH_DCA, '定投区', '💛', '1倍定投，正常建仓', '#f39c12'),
-        (THRESH_DCA, THRESH_SELL, '轻投区', '🔵', '0.5倍定投，小额分批', '#3498db'),
-        (THRESH_SELL, float('inf'), '止盈区', '🔴', '分批卖出，锁定利润', '#e74c3c'),
-    ]
-    for mn, mx, name, icon, action, color in zones:
-        if mn <= ratio < mx:
-            return {'name': name, 'icon': icon, 'action': action, 'color': color}
-    return zones[-1]
+def eth_zones(ratio):
+    """ETH阶梯定投：比值越低越低估"""
+    if ratio < T_ALLIN:
+        return ('梭哈区', '💜', '5倍定投, 重仓买入', '#9b59b6')
+    if ratio < T_HEAVY:
+        return ('重仓区', '💚', '3倍定投, 大幅加仓', '#27ae60')
+    if ratio < T_DCA:
+        return ('定投区', '💛', '1倍定投, 正常节奏', '#f39c12')
+    if ratio < T_SELL:
+        return ('轻投区', '🔵', '0.5倍定投, 小额分批', '#3498db')
+    return ('止盈区', '🔴', '分批卖出', '#e74c3c')
 
+def btc_ahr999(prices):
+    """BTC AHR999 指数"""
+    price = prices[-1]
+    sma200 = calc_sma(prices, 200)
+    exp_val = calc_exp_regression(prices)
+    if sma200 <= 0 or exp_val <= 0:
+        return 0
+    ratio = (price / sma200) * (price / exp_val)
+    return round(ratio, 4)
 
-def send_email(coin, price, sma120, ema250, ratio, zone):
-    """发送邮件"""
+def btc_zones(ratio):
+    """BTC AHR999 经典区间"""
+    if ratio < 0.45:
+        return ('抄底区', '🟣', '可以抄底', '#9b59b6')
+    if ratio < 1.2:
+        return ('定投区', '🟢', '正常定投', '#27ae60')
+    return ('持有区', '🟡', '暂停买入', '#f39c12')
+
+def send_email(coin, price, indicator, zone_info):
     if not all([SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_TO]):
-        print('⚠️ 邮箱未配置，跳过邮件发送')
+        print('邮箱没配, 跳过邮件')
         return
-
+    
+    name, icon, action, color = zone_info
     today = datetime.now().strftime('%Y-%m-%d %A')
-    subject = f'{coin} 定投日报 - 偏离度 {ratio} ({zone["name"]})'
-
-    html = f'''<html><body style="font-family:'Microsoft YaHei',Arial,sans-serif;padding:20px;background:#f5f5f5;">
-<div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+    subj = f'{coin} 定投日报 - {indicator} ({name})'
+    
+    body = f'''<html><body style="font-family:Microsoft YaHei,Arial;padding:20px;background:#f5f5f5;">
+<div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;">
 <div style="background:#1a1a2e;color:white;padding:20px;text-align:center;">
-    <h2 style="margin:0;">{coin} 阶梯定投日报</h2>
-    <p style="margin:5px 0 0;opacity:0.8;">{today}</p>
+    <h2>{coin} 定投日报</h2>
+    <p>{today}</p>
 </div>
 <div style="padding:20px;">
-    <div style="text-align:center;padding:20px;margin:15px 0;border-radius:8px;background:{zone["color"]}15;">
-        <div style="font-size:48px;font-weight:bold;color:{zone["color"]};">{ratio}</div>
-        <div style="font-size:20px;margin-top:8px;color:{zone["color"]};">{zone["icon"]} {zone["name"]}</div>
-        <div style="font-size:16px;margin-top:8px;color:#666;">→ {zone["action"]}</div>
+    <div style="text-align:center;padding:20px;background:{color}15;">
+        <div style="font-size:48px;font-weight:bold;color:{color};">{indicator}</div>
+        <div style="font-size:20px;color:{color};">{icon} {name}</div>
+        <div style="font-size:16px;color:#666;">→ {action}</div>
     </div>
-    <table style="width:100%;border-collapse:collapse;margin:15px 0;">
-        <tr><td style="padding:10px;border-bottom:1px solid #eee;color:#666;">当前价格</td>
-            <td style="padding:10px;border-bottom:1px solid #eee;font-weight:bold;text-align:right;">${price:,.2f}</td></tr>
-        <tr><td style="padding:10px;border-bottom:1px solid #eee;color:#666;">SMA {MA_SHORT}</td>
-            <td style="padding:10px;border-bottom:1px solid #eee;text-align:right;">${sma120:,.2f}</td></tr>
-        <tr><td style="padding:10px;border-bottom:1px solid #eee;color:#666;">EMA {MA_LONG}</td>
-            <td style="padding:10px;border-bottom:1px solid #eee;text-align:right;">${ema250:,.2f}</td></tr>
-        <tr><td style="padding:10px;color:#666;">偏离度指数</td>
-            <td style="padding:10px;font-weight:bold;text-align:right;color:{zone["color"]};">{ratio}</td></tr>
-    </table>
-    <div style="background:#f8f9fa;padding:12px;border-radius:8px;font-size:12px;color:#888;margin-top:15px;">
-        <strong>📊 区间说明</strong><br>
-        💜 梭哈 (&lt; {THRESH_ALLIN}) → 5倍定投<br>
-        💚 重仓 ({THRESH_ALLIN}~{THRESH_HEAVY}) → 3倍定投<br>
-        💛 定投 ({THRESH_HEAVY}~{THRESH_DCA}) → 1倍定投<br>
-        ⬜ 持有 ({THRESH_DCA}~{THRESH_SELL}) → 暂停<br>
-        🔴 止盈 (&gt; {THRESH_SELL}) → 分批卖出<br>
-        数据: Binance | 由 GitHub Actions 自动生成
-    </div>
+    <p style="text-align:center;color:#999;">当前价格: ${price:,.2f}</p>
 </div></div></body></html>'''
-
+    
     msg = MIMEMultipart('alternative')
-    msg['Subject'] = subject
+    msg['Subject'] = subj
     msg['From'] = EMAIL_FROM
     msg['To'] = EMAIL_TO
-    msg.attach(MIMEText(html, 'html', 'utf-8'))
-
+    msg.attach(MIMEText(body, 'html', 'utf-8'))
+    
     try:
-        if SMTP_PORT == 465:
-            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30)
-        else:
-            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30)
-            server.starttls()
-        server.login(SMTP_USER, SMTP_PASS)
-        server.sendmail(EMAIL_FROM, [EMAIL_TO], msg.as_string())
-        server.quit()
-        print(f'✅ 邮件已发送到 {EMAIL_TO}')
+        s = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) if SMTP_PORT == 465 else smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30)
+        if SMTP_PORT != 465:
+            s.starttls()
+        s.login(SMTP_USER, SMTP_PASS)
+        s.sendmail(EMAIL_FROM, [EMAIL_TO], msg.as_string())
+        s.quit()
+        print(f'邮件已发到 {EMAIL_TO}')
     except Exception as e:
-        print(f'❌ 邮件发送失败: {e}')
-
+        print(f'邮件发送失败: {e}')
 
 def main():
-    print(f'=== {COIN} 阶梯定投指标更新 ===')
-    print(f'时间: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
-    print(f'币种: {COIN}')
+    print(f'--- {COIN} {datetime.now().strftime("%Y-%m-%d %H:%M")} ---')
     
-    # 获取行情
-    prices = fetch_klines(SYMBOL, '1d', MA_LONG + 10)
-    if not prices:
-        print('❌ 获取行情失败')
-        return
-
-    current_price = prices[-1]
-    sma120 = calc_sma(prices, MA_SHORT)
-    ema250 = calc_ema(prices, MA_LONG)
-    ratio = round((current_price / sma120) * (current_price / ema250), 4)
-    zone = get_zone(ratio)
-
-    print(f'当前价格: ${current_price:,.2f}')
-    print(f'SMA{MA_SHORT}: ${sma120:,.2f}')
-    print(f'EMA{MA_LONG}: ${ema250:,.2f}')
-    print(f'偏离度: {ratio}')
-    print(f'区域: {zone["icon"]} {zone["name"]} → {zone["action"]}')
-
-    # 读取已有数据
-    data_path = os.path.join(DATA_DIR, DATA_FILE)
+    prices = fetch_prices()
+    price = prices[-1]
+    print(f'价格: ${price:,.2f}')
+    
+    if COIN == 'BTC':
+        # AHR999 指标
+        sma200 = calc_sma(prices, 200)
+        exp_val = calc_exp_regression(prices)
+        indicator = (price / sma200) * (price / exp_val)
+        indicator = round(indicator, 4)
+        zone = btc_zones(indicator)
+        print(f'SMA200: ${sma200:,.2f}')
+        print(f'指数估值: ${exp_val:,.2f}')
+        print(f'AHR999: {indicator}')
+        print(f'区域: {zone[0]}')
+    else:
+        # ETH 阶梯定投
+        sma = calc_sma(prices, MA_SHORT)
+        ema = calc_ema(prices, MA_LONG)
+        indicator = (price / sma) * (price / ema)
+        indicator = round(indicator, 4)
+        zone = eth_zones(indicator)
+        print(f'SMA{MA_SHORT}: ${sma:,.2f}')
+        print(f'EMA{MA_LONG}: ${ema:,.2f}')
+        print(f'偏离度: {indicator}')
+        print(f'区域: {zone[0]}')
+    
+    # 写 data.json
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', DATA_FILE)
     existing = {'history': [], 'config': {}}
-    if os.path.exists(data_path):
-        with open(data_path, 'r') as f:
+    if os.path.exists(path):
+        with open(path) as f:
             existing = json.load(f)
-
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    new_entry = {
-        'date': today_str,
-        'price': current_price,
-        'sma120': round(sma120, 2),
-        'ema250': round(ema250, 2),
-        'ratio': ratio,
-        'zone': zone['name'],
+    
+    today = datetime.now().strftime('%Y-%m-%d')
+    entry = {
+        'date': today, 'price': price, 'indicator': indicator,
+        'zone_name': zone[0], 'zone_icon': zone[1], 'zone_action': zone[2], 'zone_color': zone[3],
     }
-
-    # 去重：如果今天已有记录则覆盖
-    history = existing.get('history', [])
-    history = [h for h in history if h['date'] != today_str]
-    history.append(new_entry)
-    # 保留最近 90 天
-    history = sorted(history, key=lambda x: x['date'])[-90:]
-
-    config = {
-        'coin': COIN,
-        'thresh_allin': THRESH_ALLIN,
-        'thresh_heavy': THRESH_HEAVY,
-        'thresh_dca': THRESH_DCA,
-        'thresh_sell': THRESH_SELL,
-        'ma_short': MA_SHORT,
-        'ma_long': MA_LONG,
-        'last_update': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    
+    # 去重
+    existing['history'] = [h for h in existing.get('history', []) if h['date'] != today]
+    existing['history'].append(entry)
+    existing['history'] = sorted(existing['history'], key=lambda x: x['date'])[-90:]
+    existing['latest'] = entry
+    existing['config'] = {
+        'coin': COIN, 'last_update': datetime.now().strftime('%Y-%m-%d %H:%M'),
+        'thresh_allin': T_ALLIN, 'thresh_heavy': T_HEAVY, 'thresh_dca': T_DCA, 'thresh_sell': T_SELL,
     }
-
-    output = {
-        'latest': new_entry,
-        'history': history,
-        'config': config,
-        'zone': zone,
-    }
-
-    with open(data_path, 'w', encoding='utf-8') as f:
-        json.dump(output, f, ensure_ascii=False, indent=2)
-    print(f'✅ 数据已写入 {DATA_FILE}')
-
-    # 发邮件
-    send_email(COIN, current_price, sma120, ema250, ratio, zone)
-    print('=== 完成 ===')
-
+    existing['zone'] = {'name': zone[0], 'icon': zone[1], 'action': zone[2], 'color': zone[3]}
+    
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(existing, f, ensure_ascii=False, indent=2)
+    print('data.json 已更新')
+    
+    send_email(COIN, price, indicator, zone)
 
 if __name__ == '__main__':
     main()

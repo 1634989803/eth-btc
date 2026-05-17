@@ -1,10 +1,8 @@
-name: 每日定投指标更新
+name: 定投指标更新
 
 on:
   schedule:
-    # 每天早上 9:00 UTC+8 = 1:00 UTC
-    - cron: '0 1 * * *'
-  # 也支持手动触发
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -13,7 +11,6 @@ permissions:
 jobs:
   update:
     runs-on: ubuntu-latest
-    # 可选：如果 BTC 也要，把下面改为 matrix
     strategy:
       matrix:
         coin: [ETH, BTC]
@@ -21,12 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 设置 Python
+      - name: 装 Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: 运行指标计算
+      - name: 跑指标
         env:
           COIN: ${{ matrix.coin }}
           MA_SHORT: 120
@@ -35,7 +32,6 @@ jobs:
           THRESH_HEAVY: 0.45
           THRESH_DCA: 0.65
           THRESH_SELL: 1.60
-          # 邮箱配置（从 GitHub Secrets 读取）
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
@@ -44,10 +40,10 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
         run: python scripts/update.py
 
-      - name: 提交更新到仓库
+      - name: 提交更新
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data.json
-          git diff --staged --quiet || git commit -m "📊 每日更新 ${{ matrix.coin }} 定投指标 ($(date +'%Y-%m-%d'))"
+          git config user.name "bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add *_data.json
+          git diff --staged --quiet || git commit -m "${{ matrix.coin }} 指标更新 ($(date +'%m-%d %H:%M'))"
           git push
