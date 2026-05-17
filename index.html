@@ -71,31 +71,48 @@
     <!-- ═══ 面板: 回测 ═══ -->
     <div id="panel-backtest" class="panel">
         <div class="card">
-            <h3>🔬 DCA 策略回测</h3>
+            <h3>🔬 定投回测</h3>
             <div class="bt-form">
                 <div class="form-row">
                     <div class="form-group">
-                        <label>币种</label>
-                        <select id="btCoin"><option>ETH</option><option>BTC</option></select>
+                        <label>资产</label>
+                        <select id="btAsset"></select>
                     </div>
                     <div class="form-group">
-                        <label>每月定投 (USD)</label>
-                        <input type="number" id="btAmount" value="1000" min="100">
+                        <label>策略</label>
+                        <select id="btStrategy">
+                            <option value="indicator">📊 指标DCA</option>
+                            <option value="regular">💰 普通定投</option>
+                            <option value="lump">📥 一次性投入</option>
+                        </select>
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>开始日期</label>
+                        <label>每期金额 (USD/CNY)</label>
+                        <input type="number" id="btAmount" value="1000" min="100">
+                    </div>
+                    <div class="form-group">
+                        <label>含分红再投</label>
+                        <select id="btDiv">
+                            <option value="1">是</option>
+                            <option value="0">否</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>开始</label>
                         <input type="date" id="btStart" value="2023-01-01">
                     </div>
                     <div class="form-group">
-                        <label>结束日期</label>
+                        <label>结束</label>
                         <input type="date" id="btEnd">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>对比标的</label>
+                        <label>对比标的 (可多选)</label>
                         <div class="bench-checks" id="benchChecks"></div>
                     </div>
                 </div>
@@ -105,7 +122,7 @@
 
         <div id="btResults" style="display:none;">
             <div class="card bt-summary" id="btSummary"></div>
-            <div class="card"><canvas id="btChart" height="250"></canvas></div>
+            <div class="card"><canvas id="btChart" height="280"></canvas></div>
         </div>
     </div>
 
@@ -118,7 +135,6 @@
 <script>
 // ═══════════════════ 全局数据 ═══════════════════
 let allData = {};
-let klineCharts = {};
 let btChartInstance = null;
 
 // ═══════════════════ 面板切换 ═══════════════════
@@ -207,59 +223,82 @@ async function switchCoin(coin) {
     }
 }
 
-// ═══════════════════ K线图 ═══════════════════
+// ═══════════════════ K线图 (双面板) ═══════════════════
+let klineCharts = { price: null, indicator: null };
+
+function destroyKline() {
+    Object.values(klineCharts).forEach(c => { if (c) try { c.remove(); } catch {} });
+    klineCharts = { price: null, indicator: null };
+    document.getElementById('klineChart').innerHTML = '';
+}
+
 async function initKline(coin) {
+    destroyKline();
     document.getElementById('klineTitle').textContent = coin + '/USDT 日线 + 定投区间';
     const container = document.getElementById('klineChart');
-    if (klineCharts[coin]) return;
+    container.innerHTML = '<div id="klineTop" style="height:300px;"></div><div id="klineBot" style="height:140px;border-top:1px solid #eee;"></div>';
     
     try {
         const r = await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=1d&limit=500`);
         const data = await r.json();
         const ohlc = data.map(k => ({ time: Math.floor(k[0]/1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4] }));
         
-        const chart = LightweightCharts.createChart(container, {
-            height: 450, layout: { textColor: '#333', background: { color: '#fff' } },
-            grid: { vertLines: { color: '#f0f0f0' }, horzLines: { color: '#f0f0f0' } },
-            crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-            timeScale: { timeVisible: false },
-        });
-        
-        // K线
-        chart.addCandlestickSeries().setData(ohlc);
-        
-        // 指标线（计算每日指标值）
+        // 计算指标值
         const prices = ohlc.map(d => d.close);
         const indicators = [];
-        for (let i = 249; i < prices.length; i++) {
-            const sma = prices.slice(i-119, i+1).reduce((a,b)=>a+b,0) / 120;
-            const ema = (() => {
-                const k = 2/251;
-                let e = prices.slice(i-249, i+1).reduce((a,b)=>a+b,0) / 250;
-                for (let j = 250; j <= i; j++) e = (prices[j] - e) * k + e;
-                return e;
-            })();
+        const maShort = 120, maLong = 250;
+        for (let i = maLong - 1; i < prices.length; i++) {
+            const sma = prices.slice(i - maShort + 1, i + 1).reduce((a,b) => a+b, 0) / maShort;
+            const k = 2 / (maLong + 1);
+            let ema = prices.slice(i - maLong + 1, i + 1).reduce((a,b) => a+b, 0) / maLong;
+            for (let j = maLong; j <= i; j++) ema = (prices[j] - ema) * k + ema;
             const ratio = (prices[i] / sma) * (prices[i] / ema);
-            indicators.push({ time: ohlc[i].time, value: ratio });
+            indicators.push({ time: ohlc[i].time, value: Math.round(ratio * 10000) / 10000 });
         }
         
-        // 叠加指标线
-        const lineSeries = chart.addLineSeries({ color: '#2962FF', lineWidth: 2 });
-        lineSeries.setData(indicators.map(d => ({ time: d.time, value: d.value * 10000 })));
+        // 顶部: K线图
+        const chartTop = LightweightCharts.createChart(document.getElementById('klineTop'), {
+            height: 300, layout: { textColor: '#333', background: { color: '#fff' } },
+            grid: { vertLines: { color: '#eee' }, horzLines: { color: '#f5f5f5' } },
+            timeScale: { timeVisible: false, borderColor: '#ddd' },
+            rightPriceScale: { borderColor: '#ddd' },
+            crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        });
+        const candleSeries = chartTop.addCandlestickSeries({ upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350' });
+        candleSeries.setData(ohlc);
+        chartTop.timeScale().fitContent();
+        klineCharts.price = chartTop;
         
-        // 参考线 (在右侧标注)
-        const levels = coin === 'BTC'
-            ? [{p:0.45,c:'#9b59b6',t:'抄底'},{p:1.20,c:'#27ae60',t:'定投'}]
-            : [{p:0.35,c:'#9b59b6',t:'梭HA'},{p:0.45,c:'#27ae60',t:'重仓'},{p:0.65,c:'#f39c12',t:'定投'},{p:1.60,c:'#e74c3c',t:'止盈'}];
+        // 底部: 指标线 (独立面板, 自己的Y轴)
+        const chartBot = LightweightCharts.createChart(document.getElementById('klineBot'), {
+            height: 140, layout: { textColor: '#666', background: { color: '#fff' } },
+            grid: { vertLines: { color: '#eee' }, horzLines: { color: '#f5f5f5' } },
+            timeScale: { timeVisible: false, borderColor: '#ddd' },
+            rightPriceScale: { borderColor: '#ddd', scaleMargins: { top: 0.1, bottom: 0.1 } },
+        });
+        const lineSeries = chartBot.addLineSeries({ color: '#2962FF', lineWidth: 2, lastValueVisible: true, priceFormat: { type: 'price', precision: 4 } });
+        lineSeries.setData(indicators.map(d => ({ time: d.time, value: d.value })));
         
-        levels.forEach(lv => {
-            lineSeries.createPriceLine({ price: lv.p * 10000, color: lv.c, title: lv.t, lineWidth: 1, lineStyle: 2 });
+        // 同步时间轴
+        chartTop.timeScale().subscribeVisibleTimeRangeChange(() => {
+            const r = chartTop.timeScale().getVisibleRange();
+            if (r) chartBot.timeScale().setVisibleRange(r);
         });
         
-        chart.timeScale().fitContent();
-        klineCharts[coin] = chart;
+        // 参考线 (ETH/BTC不同阈值)
+        const levels = coin === 'BTC'
+            ? [{p:0.45, c:'#9b59b6', t:'抄底线'}, {p:1.20, c:'#27ae60', t:'定投上限'}]
+            : [{p:0.35, c:'#9b59b6', t:'梭哈线'}, {p:0.45, c:'#27ae60', t:'重仓线'}, {p:0.65, c:'#f39c12', t:'定投线'}, {p:1.60, c:'#e74c3c', t:'止盈线'}];
+        
+        levels.forEach(lv => {
+            lineSeries.createPriceLine({ price: lv.p, color: lv.c, title: lv.t, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed });
+        });
+        
+        chartBot.timeScale().fitContent();
+        klineCharts.indicator = chartBot;
+        
     } catch(e) {
-        container.innerHTML = `<p style="text-align:center;padding:40px;color:#999;">❌ K线加载失败: ${e.message}</p>`;
+        container.innerHTML = `<p style="text-align:center;padding:30px;color:#999;">❌ K线加载失败: ${e.message}</p>`;
     }
 }
 
@@ -268,38 +307,44 @@ async function switchKline(coin) {
     document.querySelectorAll('#panel-chart .coin-tab').forEach(t => t.classList.remove('active'));
     document.querySelector(`#panel-chart .coin-tab[onclick*="${coin}"]`).classList.add('active');
     klineCoin = coin;
-    if (klineCharts[coin]) {
-        document.getElementById('klineChart').innerHTML = '';
-        klineCharts[coin].remove();
-        delete klineCharts[coin];
-    }
+    destroyKline();
     initKline(coin);
 }
 
-// ═══════════════════ 回测 ═══════════════════
+// ═══════════════════ 回测 v2 ═══════════════════
 async function initBacktest() {
     const today = new Date().toISOString().slice(0,10);
     document.getElementById('btEnd').value = today;
     document.getElementById('btEnd').max = today;
     
-    // 加载基准列表
-    const benchDiv = document.getElementById('benchChecks');
-    benchDiv.innerHTML = '';
-    for (const [k, v] of Object.entries(BACKTEST.benches)) {
+    // 填充资产下拉
+    const sel = document.getElementById('btAsset');
+    sel.innerHTML = '';
+    for (const [k, v] of Object.entries(BT.assets)) {
+        const opt = document.createElement('option');
+        opt.value = k; opt.textContent = v.name;
+        sel.appendChild(opt);
+    }
+    
+    // 填充对比标的
+    const div = document.getElementById('benchChecks');
+    div.innerHTML = '';
+    for (const [k, v] of Object.entries(BT.assets)) {
+        if (k === 'ETH' || k === 'BTC') continue; // 主资产不选自己
         const label = document.createElement('label');
-        label.style.marginRight = '12px';
-        label.style.fontSize = '13px';
+        label.style.cssText = 'margin-right:10px;font-size:12px;cursor:pointer;';
         label.innerHTML = `<input type="checkbox" value="${k}"> ${v.name}`;
-        benchDiv.appendChild(label);
+        div.appendChild(label);
     }
 }
 
 async function runBacktest() {
-    const coin = document.getElementById('btCoin').value;
-    const amount = +document.getElementById('btAmount').value;
-    const start = document.getElementById('btStart').value;
-    const end = document.getElementById('btEnd').value;
-    
+    const asset = document.getElementById('btAsset').value;
+    const strategy = document.getElementById('btStrategy').value;
+    const monthly = +document.getElementById('btAmount').value;
+    const startDate = document.getElementById('btStart').value;
+    const endDate = document.getElementById('btEnd').value;
+    const includeDiv = document.getElementById('btDiv').value === '1';
     const checks = document.querySelectorAll('#benchChecks input:checked');
     const benchmarks = Array.from(checks).map(c => c.value);
     
@@ -307,63 +352,52 @@ async function runBacktest() {
     btn.textContent = '⏳ 计算中...'; btn.disabled = true;
     
     try {
-        const result = await BACKTEST.run({ coin, monthlyAmount: amount, startDate: start, endDate: end, compareBenchmarks: benchmarks });
-        showBacktestResult(result);
+        const result = await BT.run({ asset, strategy, monthly, startDate, endDate, benchmarks, includeDiv });
+        showBtResult(result);
     } catch(e) {
-        document.getElementById('btSummary').innerHTML = `<p style="color:red;">❌ ${e.message}</p>`;
+        document.getElementById('btSummary').innerHTML = `<p style="color:red;padding:10px;">❌ ${e.message}</p>`;
         document.getElementById('btResults').style.display = 'block';
     }
     
     btn.textContent = '🚀 开始回测'; btn.disabled = false;
 }
 
-function showBacktestResult(r) {
+function showBtResult(r) {
     document.getElementById('btResults').style.display = 'block';
     
-    let benchRows = '';
-    if (r.benchmarks.length) {
-        benchRows = '<tr><th>对比标的</th><th>总收益</th><th>终值</th></tr>';
-        r.benchmarks.forEach(b => {
-            const color = b.totalReturn > r.totalReturn ? '#e74c3c' : '#27ae60';
-            benchRows += `<tr><td>${b.name}</td><td style="color:${color};">${b.totalReturn > 0 ? '+' : ''}${b.totalReturn}%</td>
-                <td>$${b.finalValue.toLocaleString()}</td></tr>`;
+    // 主资产结果
+    let stats = `
+    <div class="bt-stats">
+        <div class="bt-stat"><span class="bt-label">${r.asset}</span><span class="bt-val" style="color:${r.totalReturn>=0?'#27ae60':'#e74c3c'};">${r.totalReturn>0?'+':''}${r.totalReturn}%</span><span style="font-size:11px;color:#888;">总收益</span></div>
+        <div class="bt-stat"><span class="bt-label">${r.strategy}</span><span class="bt-val">${r.annualizedReturn>0?'+':''}${r.annualizedReturn}%</span><span style="font-size:11px;color:#888;">年化</span></div>
+        <div class="bt-stat"><span class="bt-label">最大回撤</span><span class="bt-val" style="color:#e74c3c;">-${r.maxDrawdown}%</span></div>
+        <div class="bt-stat"><span class="bt-label">总投入</span><span class="bt-val">${fmt(r.totalInvested)}</span></div>
+        <div class="bt-stat"><span class="bt-label">终值</span><span class="bt-val" style="color:#27ae60;">${fmt(r.finalValue)}</span></div>
+        <div class="bt-stat"><span class="bt-label">${r.startDate} ~ ${r.endDate}</span><span class="bt-val" style="font-size:14px;">${r.months}个月</span></div>
+    </div>`;
+    
+    // 对比表
+    if (r.comparisons.length) {
+        stats += '<table class="data-table" style="margin-top:10px;"><tr><th>对比</th><th>策略</th><th>总收益</th><th>终值</th></tr>';
+        r.comparisons.forEach(c => {
+            const better = c.totalReturn > r.totalReturn;
+            stats += `<tr><td>${c.name}</td><td>普通定投</td><td style="color:${better?'#e74c3c':'#27ae60'};font-weight:bold;">${c.totalReturn>0?'+':''}${c.totalReturn}%</td><td>${fmt(c.finalValue)}</td></tr>`;
         });
+        stats += '</table>';
     }
     
-    const tableRows = r.benchmarks.length ? benchRows : '';
-    const diff = r.benchmarks.length ? r.benchmarks.map(b => ({
-        name: b.name, diff: (r.totalReturn - b.totalReturn).toFixed(2)
-    })) : [];
+    document.getElementById('btSummary').innerHTML = stats;
     
-    const summary = document.getElementById('btSummary');
-    summary.innerHTML = `
-        <div class="bt-stats">
-            <div class="bt-stat"><span class="bt-label">${r.coin} 总收益</span><span class="bt-val" style="color:${r.totalReturn >= 0 ? '#27ae60' : '#e74c3c'};">${r.totalReturn > 0 ? '+' : ''}${r.totalReturn}%</span></div>
-            <div class="bt-stat"><span class="bt-label">年化收益</span><span class="bt-val">${r.annualizedReturn > 0 ? '+' : ''}${r.annualizedReturn}%</span></div>
-            <div class="bt-stat"><span class="bt-label">最大回撤</span><span class="bt-val" style="color:#e74c3c;">-${r.maxDrawdown}%</span></div>
-            <div class="bt-stat"><span class="bt-label">总投入</span><span class="bt-val">$${r.totalInvested.toLocaleString()}</span></div>
-            <div class="bt-stat"><span class="bt-label">最终价值</span><span class="bt-val" style="color:#27ae60;">$${r.finalValue.toLocaleString()}</span></div>
-            <div class="bt-stat"><span class="bt-label">周期</span><span class="bt-val">${r.dateRange.start} ~ ${r.dateRange.end}</span></div>
-        </div>
-        ${tableRows ? '<table class="data-table" style="margin-top:10px;">' + tableRows + '</table>' : ''}`;
-    
-    // 资金曲线图
+    // 资金曲线
     if (btChartInstance) btChartInstance.destroy();
     const ctx = document.getElementById('btChart').getContext('2d');
     btChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: r.equityCurve.map(d => d.date.slice(5)),
+            labels: r.curve.map(d => d.date.slice(5)),
             datasets: [
-                { label: r.coin + ' 定投价值', data: r.equityCurve.map(d => d.value),
-                    borderColor: '#2962FF', tension: 0.3, fill: false },
-                { label: '总投入', data: r.equityCurve.map(d => d.invested),
-                    borderColor: '#999', borderDash: [5,5], tension: 0.3, fill: false },
-                ...r.benchmarks.map((b, i) => ({
-                    label: b.name, data: null, // 简化的对比
-                    borderColor: ['#e74c3c','#27ae60','#f39c12'][i],
-                    borderDash: [3,3], tension: 0.3, fill: false,
-                })),
+                { label: r.asset, data: r.curve.map(d => d.value), borderColor: '#2962FF', tension: 0.3, fill: false },
+                { label: '总投入', data: r.curve.map(d => d.invested), borderColor: '#999', borderDash: [5,5], tension: 0.3, fill: false },
             ]
         },
         options: {
@@ -373,6 +407,8 @@ function showBacktestResult(r) {
         }
     });
 }
+
+function fmt(n) { return '$' + Number(n).toLocaleString(); }
 
 // ═══════════════════ 初始化 ═══════════════════
 (async function() {
