@@ -63,7 +63,7 @@
             <h3>📈 <span id="klineTitle">ETH/USDT</span> 日线 + 定投区间</h3>
             <div id="klineChart" style="width:100%;height:450px;"></div>
             <p style="text-align:center;font-size:12px;color:#999;margin-top:5px;">
-                🟣梭HA &lt;0.35 &nbsp; 🟢重仓 &lt;0.45 &nbsp; 🟡定投 &lt;0.65 &nbsp; 🔵轻投 &lt;1.60 &nbsp; 🔴止盈 &gt;1.60
+                💜重仓 &lt;0.45 &nbsp; 💚定投 0.45~0.65 &nbsp; 💛轻投 0.65~1.60 &nbsp; 🔴止盈 &gt;1.60
             </p>
         </div>
     </div>
@@ -143,10 +143,9 @@ document.querySelectorAll('#mainTabs .tab').forEach(tab => {
 
 // ═══════════════════ 指标面板 ═══════════════════
 const ETH_ZONES = [
-    { id:'allin', min:0, max:0.35, name:'梭哈区', icon:'💜', action:'5倍定投', color:'#9b59b6', bg:'#f3e8ff' },
-    { id:'heavy', min:0.35, max:0.45, name:'重仓区', icon:'💚', action:'3倍定投', color:'#27ae60', bg:'#e8f8f0' },
-    { id:'dca', min:0.45, max:0.65, name:'定投区', icon:'💛', action:'1倍定投', color:'#f39c12', bg:'#fff8e8' },
-    { id:'light', min:0.65, max:1.60, name:'轻投区', icon:'🔵', action:'0.5倍定投', color:'#3498db', bg:'#e8f4fd' },
+    { id:'heavy', min:0, max:0.45, name:'重仓区', icon:'💜', action:'3~5倍定投', color:'#9b59b6', bg:'#f3e8ff' },
+    { id:'dca', min:0.45, max:0.65, name:'定投区', icon:'💚', action:'1倍定投', color:'#27ae60', bg:'#e8f8f0' },
+    { id:'light', min:0.65, max:1.60, name:'轻投区', icon:'💛', action:'0.5倍定投', color:'#f39c12', bg:'#fff8e8' },
     { id:'sell', min:1.60, max:Infinity, name:'止盈区', icon:'🔴', action:'分批卖出', color:'#e74c3c', bg:'#fde8e8' },
 ];
 const BTC_ZONES = [
@@ -195,7 +194,7 @@ async function switchCoin(coin) {
     document.getElementById('zoneList').innerHTML = getZones(coin).map(z =>
         `<div class="zone-item" style="border-left:4px solid ${z.color};">
             <span>${z.icon}</span><span style="font-weight:600;min-width:50px;">${z.name}</span>
-            <span style="color:#999;font-size:12px;">(< ${z.max===Infinity?'∞':z.max})</span>
+            <span style="color:#999;font-size:12px;">${z.min} ~ ${z.max===Infinity?'∞':z.max}</span>
             <span style="margin-left:auto;color:#666;">→ ${z.action}</span>
         </div>`).join('');
     
@@ -234,16 +233,36 @@ async function initKline(coin) {
         const data = await r.json();
         const ohlc = data.map(k => ({ time: Math.floor(k[0]/1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4] }));
         
-        // 计算指标值
+        // 计算指标值 (ETH指标 / BTC AHR999)
         const prices = ohlc.map(d => d.close);
         const indicators = [];
+        const isBTC = coin === 'BTC';
         const maShort = 120, maLong = 250;
+        
         for (let i = maLong - 1; i < prices.length; i++) {
-            const sma = prices.slice(i - maShort + 1, i + 1).reduce((a,b) => a+b, 0) / maShort;
+            const sub = prices.slice(0, i + 1);
+            const sma = sub.slice(-maShort).reduce((a,b) => a+b, 0) / maShort;
             const k = 2 / (maLong + 1);
-            let ema = prices.slice(i - maLong + 1, i + 1).reduce((a,b) => a+b, 0) / maLong;
-            for (let j = maLong; j <= i; j++) ema = (prices[j] - ema) * k + ema;
-            const ratio = (prices[i] / sma) * (prices[i] / ema);
+            let emaVal = sub.slice(-maLong).reduce((a,b) => a+b, 0) / maLong;
+            for (let j = sub.length - maLong; j < sub.length; j++) emaVal = (sub[j] - emaVal) * k + emaVal;
+            
+            let ratio = (sub[sub.length-1] / sma) * (sub[sub.length-1] / emaVal);
+            
+            if (isBTC) {
+                // BTC AHR999: 指数回归
+                const n = sub.length;
+                const x = [...Array(n).keys()];
+                const y = sub.map(p => Math.log(p));
+                const ax = x.reduce((a,b) => a+b, 0) / n;
+                const ay = y.reduce((a,b) => a+b, 0) / n;
+                const num = x.reduce((s, xi, idx) => s + (xi - ax) * (y[idx] - ay), 0);
+                const den = x.reduce((s, xi) => s + (xi - ax) ** 2, 0);
+                const a = den ? num / den : 0;
+                const bCoeff = ay - a * ax;
+                const expVal = Math.exp(a * (n - 1) + bCoeff);
+                ratio = (sub[sub.length-1] / sma) * (sub[sub.length-1] / expVal);
+            }
+            
             indicators.push({ time: ohlc[i].time, value: Math.round(ratio * 10000) / 10000 });
         }
         
@@ -276,10 +295,10 @@ async function initKline(coin) {
             if (r) chartBot.timeScale().setVisibleRange(r);
         });
         
-        // 参考线 (ETH/BTC不同阈值)
+        // 参考线 (ETH/BTC)
         const levels = coin === 'BTC'
-            ? [{p:0.45, c:'#9b59b6', t:'抄底线'}, {p:1.20, c:'#27ae60', t:'定投上限'}]
-            : [{p:0.35, c:'#9b59b6', t:'梭哈线'}, {p:0.45, c:'#27ae60', t:'重仓线'}, {p:0.65, c:'#f39c12', t:'定投线'}, {p:1.60, c:'#e74c3c', t:'止盈线'}];
+            ? [{p:0.45, c:'#9b59b6', t:'抄底'}, {p:1.20, c:'#27ae60', t:'定投'}]
+            : [{p:0.45, c:'#9b59b6', t:'重仓'}, {p:0.65, c:'#27ae60', t:'定投'}, {p:1.60, c:'#f39c12', t:'止盈'}];
         
         levels.forEach(lv => {
             lineSeries.createPriceLine({ price: lv.p, color: lv.c, title: lv.t, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed });
@@ -400,7 +419,11 @@ function showBtResults(results, strategy) {
         data: { labels, datasets },
         options: {
             responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: {size: 11} } } },
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                tooltip: { enabled: true, mode: 'index', intersect: false },
+                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: {size: 11} } }
+            },
             scales: { y: { ticks: { callback: v => '$' + v.toLocaleString() } } }
         }
     });
