@@ -41,6 +41,33 @@
         <div class="chart-bars" id="chartBars"></div>
     </div>
 
+    <!-- ⚙️ 设置 -->
+    <div class="card">
+        <details>
+            <summary style="cursor:pointer;font-size:14px;font-weight:600;color:#1a1a2e;">⚙️ 通知设置</summary>
+            <div class="settings" style="margin-top:12px;">
+                <div class="setting-row">
+                    <span>📧 邮件通知</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="emailToggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span id="emailStatus" style="font-size:13px;color:#888;"></span>
+                </div>
+                <div class="setting-row">
+                    <span>⏰ 发送时间</span>
+                    <input type="time" id="emailTime" value="12:45" style="padding:5px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                    <span style="font-size:12px;color:#999;">(北京时间)</span>
+                </div>
+                <div style="margin-top:10px;font-size:12px;color:#888;">
+                    修改设置请编辑 <a href="https://github.com/1634989803/eth-btc/blob/main/settings.json" target="_blank" style="color:#4a6cf7;">settings.json</a>
+                    ，保存后下次到点生效。
+                    <br><a href="https://github.com/1634989803/eth-btc/actions/workflows/daily.yml" target="_blank" style="color:#4a6cf7;">手动触发测试</a>
+                </div>
+            </div>
+        </details>
+    </div>
+
     <footer class="footer">
         <p>数据: OKX/Bybit · 每天12:45更新 · 仅供参考</p>
     </footer>
@@ -67,21 +94,14 @@ let allData = {};
 async function switchCoin(coin) {
     document.querySelectorAll('.coin-tab').forEach(t => t.classList.remove('active'));
     document.querySelector(`.coin-tab[onclick*="${coin}"]`).classList.add('active');
-    
     ['mainCard','detailCard','historyCard'].forEach(id => document.getElementById(id).style.display = 'none');
     const ld = document.getElementById('loading'); ld.style.display = 'block'; ld.innerHTML = '<p style="text-align:center;padding:30px;color:#999;">加载中...</p>';
-    
     const data = allData[coin];
     if (!data) { ld.innerHTML = '<p style="text-align:center;padding:30px;color:#999;">暂无数据</p>'; return; }
-    
-    const l = data.latest;
-    const h = data.history || [];
-    const z = getZone(coin, l.indicator);
-    
+    const l = data.latest, h = data.history || [], z = getZone(coin, l.indicator);
     ld.style.display = 'none';
     document.getElementById('mainCard').style.display = 'block';
     document.getElementById('detailCard').style.display = 'block';
-    
     const mc = document.getElementById('mainCard');
     mc.style.borderTop = '4px solid ' + z.color;
     document.getElementById('indicatorDisplay').textContent = l.indicator;
@@ -91,21 +111,17 @@ async function switchCoin(coin) {
     document.getElementById('zoneDisplay').style.color = z.color;
     document.getElementById('actionText').textContent = '→ ' + z.action;
     document.getElementById('priceInfo').innerHTML = `$${Number(l.price).toLocaleString()} · ${l.date}`;
-    
     document.getElementById('dataTable').innerHTML = `
         <tr><td>指标值</td><td class="value" style="color:${z.color};font-weight:bold;">${l.indicator}</td></tr>
         <tr><td>区域</td><td class="value">${z.icon} ${z.name}</td></tr>
         <tr><td>策略</td><td class="value">${z.action}</td></tr>
         <tr><td>价格</td><td class="value">$${Number(l.price).toLocaleString()}</td></tr>`;
-    
     document.getElementById('zoneList').innerHTML = zones(coin).map(z2 =>
         `<div class="zone-item" style="border-left:4px solid ${z2.color};">
             <span>${z2.icon}</span><span style="font-weight:600;min-width:50px;">${z2.name}</span>
             <span style="color:#999;font-size:12px;">${z2.min} ~ ${z2.max===Infinity?'∞':z2.max}</span>
             <span style="margin-left:auto;color:#666;">→ ${z2.action}</span>
-        </div>`
-    ).join('');
-    
+        </div>`).join('');
     if (h.length > 1) {
         document.getElementById('historyCard').style.display = 'block';
         document.getElementById('chartDays').textContent = h.length;
@@ -121,6 +137,19 @@ async function switchCoin(coin) {
     }
 }
 
+// ⚙️ 设置 (只读)
+async function loadSettings() {
+    try {
+        const r = await fetch('settings.json?_=' + Date.now());
+        const s = await r.json();
+        document.getElementById('emailToggle').checked = s.email_enabled !== false;
+        document.getElementById('emailTime').value = s.email_time || '12:45';
+        const on = document.getElementById('emailToggle').checked;
+        document.getElementById('emailStatus').textContent = on ? '🟢 已开启' : '🔴 已关闭';
+    } catch {}
+}
+
+// 初始化
 (async function() {
     try {
         const [eth, btc] = await Promise.all([
@@ -130,6 +159,7 @@ async function switchCoin(coin) {
         if (eth) allData.ETH = eth;
         if (btc) allData.BTC = btc;
         switchCoin(eth ? 'ETH' : 'BTC');
+        loadSettings();
     } catch(e) {
         document.getElementById('loading').innerHTML = '<p style="text-align:center;padding:30px;color:#999;">加载失败</p>';
     }
