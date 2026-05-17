@@ -1,213 +1,227 @@
 /**
- * 定投回测引擎
- * 浏览器端运行, 支持多标的对比 + 分红计算
+ * 回测引擎 v2
+ * 支持: ETH/BTC(实时) + 沪深300/中证500/QQQ/SPY(预载数据)
+ * 策略: 指标DCA / 普通定投 / 一次性投入
+ * 分红: ETF含分红再投
  */
 
-const BACKTEST = {
+const BT = {
 
-// 基准标的配置
-benches: {
-    'csi300':  { name: '沪深300', type: 'index', divYield: 0.02  },
-    'csi500':  { name: '中证500', type: 'index', divYield: 0.015 },
-    'qqq':     { name: '纳斯达克100', type: 'etf', divYield: 0.0065 },
-    'qqqi':    { name: 'QQQI',    type: 'etf', divYield: 0.12   },
-    'spy':     { name: '标普500', type: 'etf', divYield: 0.013  },
+// 所有可回测资产
+assets: {
+    'ETH': { name: 'ETH 以太坊', type: 'crypto', apiSymbol: 'ETHUSDT' },
+    'BTC': { name: 'BTC 比特币', type: 'crypto', apiSymbol: 'BTCUSDT' },
+    'csi300': { name: '沪深300', type: 'bench', file: 'csi300.json' },
+    'csi500': { name: '中证500', type: 'bench', file: 'csi500.json' },
+    'qqq': { name: '纳斯达克100(QQQ)', type: 'bench', file: 'qqq.json' },
+    'spy': { name: '标普500(SPY)', type: 'bench', file: 'spy.json' },
 },
 
-// 从币安获取历史K线 (CORS 友好)
-async fetchCryptoOHLC(symbol, days = 800) {
-    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&limit=${days}`;
-    const r = await fetch(url);
-    const data = await r.json();
-    return data.map(k => ({
-        t: k[0], date: new Date(k[0]).toISOString().slice(0,10),
-        o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5]
-    }));
+// 从币安取K线 (CORS友好)
+async fetchBinance(symbol, limit = 800) {
+    const r = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&limit=${limit}`);
+    const d = await r.json();
+    return d.map(k => ({ date: new Date(k[0]).toISOString().slice(0,10), price: +k[4] }));
 },
 
-// 计算阶梯定投指标 (同TV指标逻辑)
-calcIndicator(prices, maShort = 120, maLong = 250) {
-    if (prices.length < maLong) return null;
+// 从预载JSON取数据
+async fetchBench(file) {
+    const r = await fetch(`benchmarks/${file}`);
+    const d = await r.json();
+    return d.data.map(x => ({ date: x.date, price: x.price }));
+},
+
+// 计算指标 (ETH阶梯 / BTC-AHR999)
+calcIndicator(prices, isBTC) {
+    if (prices.length < 250) return null;
+    const maShort = 120, maLong = 250;
     const sma = prices.slice(-maShort).reduce((a,b) => a+b, 0) / maShort;
-    const ema = this.calcEMA(prices, maLong);
-    return (prices[prices.length-1] / sma) * (prices[prices.length-1] / ema);
-},
-
-calcEMA(prices, period) {
-    const k = 2 / (period + 1);
-    let ema = prices.slice(0, period).reduce((a,b) => a+b, 0) / period;
-    for (let i = period; i < prices.length; i++) {
-        ema = (prices[i] - ema) * k + ema;
+    const k = 2 / (maLong + 1);
+    let ema = prices.slice(-maLong).reduce((a,b) => a+b, 0) / maLong;
+    for (let i = prices.length - maLong; i < prices.length; i++) ema = (prices[i] - ema) * k + ema;
+    const ratio = (prices[prices.length-1] / sma) * (prices[prices.length-1] / ema);
+    
+    if (isBTC) {
+        // BTC AHR999: 需要指数回归
+        const n = prices.length;
+        const x = [...Array(n).keys()];
+        const y = prices.map(p => Math.log(p));
+        const ax = x.reduce((a,b) => a+b, 0) / n;
+        const ay = y.reduce((a,b) => a+b, 0) / n;
+        const num = x.reduce((s, xi, i) => s + (xi - ax) * (y[i] - ay), 0);
+        const den = x.reduce((s, xi) => s + (xi - ax) ** 2, 0);
+        const a = den ? num / den : 0;
+        const b = ay - a * ax;
+        const expVal = Math.exp(a * (n - 1) + b);
+        return (prices[prices.length-1] / sma) * (prices[prices.length-1] / expVal);
     }
-    return ema;
+    return ratio;
 },
 
 // 判断阶梯
-getZone(ratio, isBTC = false) {
+getZone(ratio, isBTC) {
     if (isBTC) {
-        if (ratio < 0.45) return { name: '抄底区', icon: '🟣', mult: 5 };
-        if (ratio < 1.20) return { name: '定投区', icon: '🟢', mult: 1 };
-        return { name: '持有区', icon: '🟡', mult: 0 };
+        if (ratio < 0.45) return { name:'抄底区', mult:5 };
+        if (ratio < 1.20) return { name:'定投区', mult:1 };
+        return { name:'持有区', mult:0 };
     }
-    if (ratio < 0.35) return { name: '梭哈区', icon: '💜', mult: 5 };
-    if (ratio < 0.45) return { name: '重仓区', icon: '💚', mult: 3 };
-    if (ratio < 0.65) return { name: '定投区', icon: '💛', mult: 1 };
-    if (ratio < 1.60) return { name: '轻投区', icon: '🔵', mult: 0.5 };
-    return { name: '止盈区', icon: '🔴', mult: -0.5 }; // -0.5 = 卖一半
+    if (ratio < 0.35) return { name:'梭哈区', mult:5 };
+    if (ratio < 0.45) return { name:'重仓区', mult:3 };
+    if (ratio < 0.65) return { name:'定投区', mult:1 };
+    if (ratio < 1.60) return { name:'轻投区', mult:0.5 };
+    return { name:'止盈区', mult:-0.5 };
 },
 
-// 执行回测
-async run(options) {
-    const {
-        coin = 'ETH',                // 币种
-        monthlyAmount = 1000,        // 每月定投金额(USD)
-        startDate = '2022-01-01',    // 开始日期
-        endDate = new Date().toISOString().slice(0,10), // 结束日期
-        includeDividends = true,     // 是否算分红
-        compareBenchmarks = [],      // 对比标的 ['qqq', 'spy']
-    } = options;
-
-    const symbol = coin + 'USDT';
-    const isBTC = coin === 'BTC';
-    const ohlc = await this.fetchCryptoOHLC(symbol);
+// 主回测
+async run(opts) {
+    const { asset, strategy, monthly, startDate, endDate, benchmarks, includeDiv } = opts;
+    const cfg = this.assets[asset];
+    if (!cfg) throw new Error('未知资产');
     
-    // 过滤日期范围
-    const filtered = ohlc.filter(d => d.date >= startDate && d.date <= endDate);
-    if (filtered.length < 250) throw new Error('数据不足, 请缩小时间范围');
+    // 取数据
+    let data;
+    if (cfg.type === 'crypto') data = await this.fetchBinance(cfg.apiSymbol);
+    else data = await this.fetchBench(cfg.file);
     
-    const prices = filtered.map(d => d.c);
-    const dates = filtered.map(d => d.date);
+    if (!data || data.length < 20) throw new Error('数据不足');
+    data = data.filter(d => d.date >= startDate && d.date <= endDate);
+    if (data.length < 20) throw new Error('该时间段数据不足');
     
-    // 逐月回测
-    let totalShares = 0;
-    let totalInvested = 0;
-    let peak = 0;
-    let maxDrawdown = 0;
-    const equityCurve = [];
+    const isBTC = asset === 'BTC';
+    const divYield = includeDiv && cfg.type === 'bench' ? (cfg.divYield || 0) : 0;
+    const monthlyDivRate = divYield / 12;
     
-    // 按月初定投
+    // 回测
+    let shares = 0, invested = 0, peak = 0, maxDD = 0;
+    const curve = [];
     let lastMonth = '';
-    let monthlyDiv = 0;
+    let startIdx = 0;
     
-    for (let i = 120; i < prices.length; i++) { // 从有120日均线数据开始
-        const currentMonth = dates[i].slice(0, 7);
-        const price = prices[i];
-        const ratio = this.calcIndicator(prices.slice(0, i + 1), 120, 250);
-        if (!ratio) continue;
+    // 指标DCA需要至少250个数据点预热
+    if (strategy === 'indicator') {
+        startIdx = 250;
+        if (data.length <= startIdx) throw new Error('数据太少, 指标DCA需要至少250天数据预热');
+    }
+    
+    for (let i = startIdx; i < data.length; i++) {
+        const { date, price } = data[i];
+        const month = date.slice(0, 7);
         
-        const zone = this.getZone(ratio, isBTC);
-        const date = dates[i];
-        
-        // 月初定投
-        if (currentMonth !== lastMonth) {
-            lastMonth = currentMonth;
-            if (zone.mult > 0) {
-                const invest = monthlyAmount * zone.mult;
-                const shares = invest / price;
-                totalShares += shares;
-                totalInvested += invest;
-            } else if (zone.mult < 0 && totalShares > 0) {
-                // 止盈: 卖一半
-                const sellShares = totalShares * 0.5;
-                totalShares -= sellShares;
+        // 每月定投
+        if (month !== lastMonth) {
+            lastMonth = month;
+            
+            let investAmt = 0;
+            if (strategy === 'lump' && i === startIdx) {
+                // 一次性投入
+                investAmt = monthly;
+            } else if (strategy === 'regular') {
+                investAmt = monthly;
+            } else if (strategy === 'indicator') {
+                // 指标DCA
+                const subPrices = data.slice(0, i + 1).map(d => d.price);
+                const ratio = this.calcIndicator(subPrices, isBTC);
+                if (ratio) {
+                    const zone = this.getZone(ratio, isBTC);
+                    if (zone.mult > 0) {
+                        investAmt = monthly * zone.mult;
+                    } else if (zone.mult < 0 && shares > 0) {
+                        // 止盈: 卖一半
+                        shares *= 0.5;
+                    }
+                }
             }
             
-            // 分红 (按月计算)
-            if (includeDividends) {
-                // 对于crypto没有分红, 但对ETF对比标的会算
+            if (investAmt > 0) {
+                const newShares = investAmt / price;
+                shares += newShares;
+                invested += investAmt;
+            }
+            
+            // 分红再投
+            if (monthlyDivRate > 0 && shares > 0) {
+                shares += shares * monthlyDivRate;
             }
         }
         
-        const portfolioValue = totalShares * price;
-        if (portfolioValue > peak) peak = portfolioValue;
-        const dd = (peak - portfolioValue) / peak;
-        if (dd > maxDrawdown) maxDrawdown = dd;
+        const value = shares * price;
+        if (value > peak) peak = value;
+        const dd = peak > 0 ? (peak - value) / peak * 100 : 0;
+        if (dd > maxDD) maxDD = dd;
         
-        // 每10天记录一点
-        if (i % 10 === 0 || i === prices.length - 1) {
-            equityCurve.push({ date: dates[i], value: portfolioValue, invested: totalInvested });
+        if (i % 20 === 0 || i === data.length - 1) {
+            curve.push({ date, value: Math.round(value), invested: Math.round(invested) });
         }
     }
     
-    const finalValue = totalShares * prices[prices.length - 1];
-    const totalReturn = totalInvested > 0 ? ((finalValue - totalInvested) / totalInvested * 100) : 0;
-    const annualizedReturn = this.calcAnnualized(totalReturn, filtered.length / 365);
+    const finalPrice = data[data.length - 1].price;
+    const finalValue = Math.round(shares * finalPrice);
+    const totalReturn = invested > 0 ? ((finalValue - invested) / invested * 100) : 0;
+    const years = (data.length - startIdx) / 365;
+    const annualized = years > 0 ? (Math.pow(1 + totalReturn / 100, 1 / years) - 1) * 100 : 0;
     
     const result = {
-        coin,
-        totalInvested: Math.round(totalInvested),
-        finalValue: Math.round(finalValue),
+        asset: cfg.name,
+        strategy: strategy === 'indicator' ? '指标DCA' : strategy === 'regular' ? '普通定投' : '一次性投入',
+        totalInvested: invested,
+        finalValue,
         totalReturn: Math.round(totalReturn * 100) / 100,
-        annualizedReturn: Math.round(annualizedReturn * 100) / 100,
-        maxDrawdown: Math.round(maxDrawdown * 10000) / 100,
-        totalShares: Math.round(totalShares * 10000) / 10000,
-        equityCurve,
-        dateRange: { start: dates[120], end: dates[dates.length - 1] },
-        months: lastMonth,
+        annualized: Math.round(annualized * 100) / 100,
+        maxDrawdown: Math.round(maxDD * 100) / 100,
+        months: Math.round((data.length - startIdx) / 30),
+        startDate: data[startIdx].date,
+        endDate: data[data.length - 1].date,
+        finalPrice: Math.round(finalPrice * 100) / 100,
+        curve,
     };
     
     // 对比标的
-    result.benchmarks = [];
-    for (const bench of compareBenchmarks) {
-        const benchResult = await this.runBenchmark(bench, startDate, endDate, monthlyAmount, includeDividends);
-        if (benchResult) result.benchmarks.push(benchResult);
+    result.comparisons = [];
+    for (const b of benchmarks) {
+        try {
+            const comp = await this.compareBench(b, startDate, endDate, monthly, strategy === 'lump', includeDiv);
+            result.comparisons.push(comp);
+        } catch {}
     }
     
     return result;
 },
 
-// 回测基准标的 (从预加载的数据)
-async runBenchmark(name, startDate, endDate, monthlyAmount, includeDividends) {
-    try {
-        const r = await fetch(`benchmarks/${name}.json`);
-        const data = await r.json();
-        // data = [{date, price}, ...] filtered by date range
-        const filtered = data.filter(d => d.date >= startDate && d.date <= endDate);
-        if (filtered.length < 20) return null;
-        
-        const config = this.benches[name];
-        const divYield = config ? config.divYield : 0;
-        const monthlyDivRate = divYield / 12;
-        
-        let shares = 0;
-        let invested = 0;
-        let lastMonth = '';
-        
-        for (let i = 0; i < filtered.length; i++) {
-            const d = filtered[i];
-            const month = d.date.slice(0, 7);
-            
-            if (month !== lastMonth) {
-                lastMonth = month;
-                const invest = monthlyAmount;
-                shares += invest / d.price;
-                invested += invest;
-                
-                // 分红: 按每月股息率增加股份
-                if (includeDividends && monthlyDivRate > 0) {
-                    const divShares = (shares * monthlyDivRate);
-                    shares += divShares;
-                }
+// 对比标的回测 (简单定投)
+async compareBench(name, startDate, endDate, monthly, isLump, includeDiv) {
+    const cfg = this.assets[name];
+    if (!cfg) return null;
+    let data;
+    if (cfg.type === 'crypto') data = await this.fetchBinance(cfg.apiSymbol);
+    else data = await this.fetchBench(cfg.file);
+    if (!data) return null;
+    
+    data = data.filter(d => d.date >= startDate && d.date <= endDate);
+    if (data.length < 10) return null;
+    
+    const divYield = includeDiv && cfg.type === 'bench' ? (cfg.divYield || 0) : 0;
+    const mdr = divYield / 12;
+    
+    let shares = 0, invested = 0, lastMonth = '';
+    for (const { date, price } of data) {
+        const month = date.slice(0, 7);
+        if (month !== lastMonth) {
+            lastMonth = month;
+            if (isLump && invested === 0) {
+                shares += monthly / price;
+                invested += monthly;
+            } else if (!isLump) {
+                shares += monthly / price;
+                invested += monthly;
             }
+            if (mdr > 0 && shares > 0) shares += shares * mdr;
         }
-        
-        const finalValue = shares * filtered[filtered.length - 1].price;
-        const totalReturn = ((finalValue - invested) / invested * 100);
-        
-        return {
-            name: config ? config.name : name,
-            totalReturn: Math.round(totalReturn * 100) / 100,
-            finalValue: Math.round(finalValue),
-            invested: Math.round(invested),
-        };
-    } catch {
-        return null;
     }
-},
-
-calcAnnualized(totalReturn, years) {
-    if (years <= 0) return 0;
-    return (Math.pow(1 + totalReturn / 100, 1 / years) - 1) * 100;
+    
+    const finalValue = Math.round(shares * data[data.length - 1].price);
+    const totalReturn = invested > 0 ? ((finalValue - invested) / invested * 100) : 0;
+    
+    return { name: cfg.name, totalInvested: invested, finalValue, totalReturn: Math.round(totalReturn * 100) / 100 };
 }
 
 };
