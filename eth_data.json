@@ -98,20 +98,29 @@
       "zone_icon": "🔵",
       "zone_action": "0.5倍定投, 小额分批",
       "zone_color": "#3498db"
+    },
+    {
+      "date": "2026-05-28",
+      "price": 2025.64,
+      "indicator": 0.7483,
+      "zone_name": "轻投区",
+      "zone_icon": "🔵",
+      "zone_action": "0.5倍定投, 小额分批",
+      "zone_color": "#3498db"
     }
   ],
   "config": {
     "coin": "ETH",
-    "last_update": "2026-05-27 22:42",
+    "last_update": "2026-05-28 00:02",
     "thresh_allin": 0.35,
     "thresh_heavy": 0.45,
     "thresh_dca": 0.65,
     "thresh_sell": 1.6
   },
   "latest": {
-    "date": "2026-05-27",
-    "price": 2032.01,
-    "indicator": 0.748,
+    "date": "2026-05-28",
+    "price": 2025.64,
+    "indicator": 0.7483,
     "zone_name": "轻投区",
     "zone_icon": "🔵",
     "zone_action": "0.5倍定投, 小额分批",
