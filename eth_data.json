@@ -161,20 +161,29 @@
       "zone_icon": "💛",
       "zone_action": "1倍定投, 正常节奏",
       "zone_color": "#f39c12"
+    },
+    {
+      "date": "2026-06-04",
+      "price": 1811.44,
+      "indicator": 0.619,
+      "zone_name": "定投区",
+      "zone_icon": "💛",
+      "zone_action": "1倍定投, 正常节奏",
+      "zone_color": "#f39c12"
     }
   ],
   "config": {
     "coin": "ETH",
-    "last_update": "2026-06-03 23:46",
+    "last_update": "2026-06-04 04:18",
     "thresh_allin": 0.35,
     "thresh_heavy": 0.45,
     "thresh_dca": 0.65,
     "thresh_sell": 1.6
   },
   "latest": {
-    "date": "2026-06-03",
-    "price": 1816.86,
-    "indicator": 0.6199,
+    "date": "2026-06-04",
+    "price": 1811.44,
+    "indicator": 0.619,
     "zone_name": "定投区",
     "zone_icon": "💛",
     "zone_action": "1倍定投, 正常节奏",
