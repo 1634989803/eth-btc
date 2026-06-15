@@ -263,17 +263,17 @@
     },
     {
       "date": "2026-06-15",
-      "price": 1815.83,
-      "indicator": 0.6592,
-      "zone_name": "轻投区",
-      "zone_icon": "🔵",
-      "zone_action": "0.5倍定投, 小额分批",
-      "zone_color": "#3498db"
+      "price": 1791.7,
+      "indicator": 0.642,
+      "zone_name": "定投区",
+      "zone_icon": "💛",
+      "zone_action": "1倍定投, 正常节奏",
+      "zone_color": "#f39c12"
     }
   ],
   "config": {
     "coin": "ETH",
-    "last_update": "2026-06-15 21:45",
+    "last_update": "2026-06-15 23:47",
     "thresh_allin": 0.35,
     "thresh_heavy": 0.45,
     "thresh_dca": 0.65,
@@ -281,17 +281,17 @@
   },
   "latest": {
     "date": "2026-06-15",
-    "price": 1815.83,
-    "indicator": 0.6592,
-    "zone_name": "轻投区",
-    "zone_icon": "🔵",
-    "zone_action": "0.5倍定投, 小额分批",
-    "zone_color": "#3498db"
+    "price": 1791.7,
+    "indicator": 0.642,
+    "zone_name": "定投区",
+    "zone_icon": "💛",
+    "zone_action": "1倍定投, 正常节奏",
+    "zone_color": "#f39c12"
   },
   "zone": {
-    "name": "轻投区",
-    "icon": "🔵",
-    "action": "0.5倍定投, 小额分批",
-    "color": "#3498db"
+    "name": "定投区",
+    "icon": "💛",
+    "action": "1倍定投, 正常节奏",
+    "color": "#f39c12"
   }
 }
