@@ -425,8 +425,8 @@
     },
     {
       "date": "2026-07-03",
-      "price": 1747.94,
-      "indicator": 0.6651,
+      "price": 1758.34,
+      "indicator": 0.673,
       "zone_name": "轻投区",
       "zone_icon": "🔵",
       "zone_action": "0.5倍定投, 小额分批",
@@ -435,7 +435,7 @@
   ],
   "config": {
     "coin": "ETH",
-    "last_update": "2026-07-03 20:16",
+    "last_update": "2026-07-03 22:06",
     "thresh_allin": 0.35,
     "thresh_heavy": 0.45,
     "thresh_dca": 0.65,
@@ -443,8 +443,8 @@
   },
   "latest": {
     "date": "2026-07-03",
-    "price": 1747.94,
-    "indicator": 0.6651,
+    "price": 1758.34,
+    "indicator": 0.673,
     "zone_name": "轻投区",
     "zone_icon": "🔵",
     "zone_action": "0.5倍定投, 小额分批",
