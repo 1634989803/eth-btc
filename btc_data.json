@@ -515,8 +515,8 @@
     },
     {
       "date": "2026-07-13",
-      "price": 62096.2,
-      "indicator": 0.8427,
+      "price": 61994.1,
+      "indicator": 0.84,
       "zone_name": "定投区",
       "zone_icon": "🟢",
       "zone_action": "正常定投",
@@ -525,7 +525,7 @@
   ],
   "config": {
     "coin": "BTC",
-    "last_update": "2026-07-13 21:58",
+    "last_update": "2026-07-13 23:04",
     "thresh_allin": 0.35,
     "thresh_heavy": 0.45,
     "thresh_dca": 0.65,
@@ -533,8 +533,8 @@
   },
   "latest": {
     "date": "2026-07-13",
-    "price": 62096.2,
-    "indicator": 0.8427,
+    "price": 61994.1,
+    "indicator": 0.84,
     "zone_name": "定投区",
     "zone_icon": "🟢",
     "zone_action": "正常定投",
