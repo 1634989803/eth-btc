@@ -803,7 +803,7 @@
     },
     {
       "date": "2026-08-17",
-      "price": 1910.17,
+      "price": 1910.18,
       "indicator": 0.9096,
       "zone_name": "轻投区",
       "zone_icon": "🔵",
@@ -813,7 +813,7 @@
   ],
   "config": {
     "coin": "ETH",
-    "last_update": "2026-08-17 18:41",
+    "last_update": "2026-08-17 19:29",
     "thresh_allin": 0.35,
     "thresh_heavy": 0.45,
     "thresh_dca": 0.65,
@@ -821,7 +821,7 @@
   },
   "latest": {
     "date": "2026-08-17",
-    "price": 1910.17,
+    "price": 1910.18,
     "indicator": 0.9096,
     "zone_name": "轻投区",
     "zone_icon": "🔵",
