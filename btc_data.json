@@ -803,8 +803,8 @@
     },
     {
       "date": "2026-09-01",
-      "price": 78679.3,
-      "indicator": 1.4048,
+      "price": 78791.9,
+      "indicator": 1.4088,
       "zone_name": "持有区",
       "zone_icon": "🟡",
       "zone_action": "暂停买入",
@@ -813,7 +813,7 @@
   ],
   "config": {
     "coin": "BTC",
-    "last_update": "2026-09-01 01:03",
+    "last_update": "2026-09-01 07:26",
     "thresh_allin": 0.35,
     "thresh_heavy": 0.45,
     "thresh_dca": 0.65,
@@ -821,8 +821,8 @@
   },
   "latest": {
     "date": "2026-09-01",
-    "price": 78679.3,
-    "indicator": 1.4048,
+    "price": 78791.9,
+    "indicator": 1.4088,
     "zone_name": "持有区",
     "zone_icon": "🟡",
     "zone_action": "暂停买入",
