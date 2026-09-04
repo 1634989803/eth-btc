@@ -1,15 +1,6 @@
 {
   "history": [
     {
-      "date": "2026-06-06",
-      "price": 1553.93,
-      "indicator": 0.4608,
-      "zone_name": "定投区",
-      "zone_icon": "💛",
-      "zone_action": "1倍定投, 正常节奏",
-      "zone_color": "#f39c12"
-    },
-    {
       "date": "2026-06-07",
       "price": 1673.96,
       "indicator": 0.5375,
@@ -809,20 +800,29 @@
       "zone_icon": "🔵",
       "zone_action": "0.5倍定投, 小额分批",
       "zone_color": "#3498db"
+    },
+    {
+      "date": "2026-09-04",
+      "price": 2508.5,
+      "indicator": 1.5363,
+      "zone_name": "轻投区",
+      "zone_icon": "🔵",
+      "zone_action": "0.5倍定投, 小额分批",
+      "zone_color": "#3498db"
     }
   ],
   "config": {
     "coin": "ETH",
-    "last_update": "2026-09-03 23:02",
+    "last_update": "2026-09-04 03:30",
     "thresh_allin": 0.35,
     "thresh_heavy": 0.45,
     "thresh_dca": 0.65,
     "thresh_sell": 1.6
   },
   "latest": {
-    "date": "2026-09-03",
-    "price": 2496.33,
-    "indicator": 1.5247,
+    "date": "2026-09-04",
+    "price": 2508.5,
+    "indicator": 1.5363,
     "zone_name": "轻投区",
     "zone_icon": "🔵",
     "zone_action": "0.5倍定投, 小额分批",
