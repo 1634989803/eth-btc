@@ -1,15 +1,6 @@
 {
   "history": [
     {
-      "date": "2026-06-07",
-      "price": 62839.2,
-      "indicator": 0.7748,
-      "zone_name": "定投区",
-      "zone_icon": "🟢",
-      "zone_action": "正常定投",
-      "zone_color": "#27ae60"
-    },
-    {
       "date": "2026-06-08",
       "price": 63314.7,
       "indicator": 0.7891,
@@ -809,20 +800,29 @@
       "zone_icon": "🟡",
       "zone_action": "暂停买入",
       "zone_color": "#f39c12"
+    },
+    {
+      "date": "2026-09-05",
+      "price": 79650.1,
+      "indicator": 1.4198,
+      "zone_name": "持有区",
+      "zone_icon": "🟡",
+      "zone_action": "暂停买入",
+      "zone_color": "#f39c12"
     }
   ],
   "config": {
     "coin": "BTC",
-    "last_update": "2026-09-04 22:51",
+    "last_update": "2026-09-05 00:41",
     "thresh_allin": 0.35,
     "thresh_heavy": 0.45,
     "thresh_dca": 0.65,
     "thresh_sell": 1.6
   },
   "latest": {
-    "date": "2026-09-04",
-    "price": 79651.9,
-    "indicator": 1.4253,
+    "date": "2026-09-05",
+    "price": 79650.1,
+    "indicator": 1.4198,
     "zone_name": "持有区",
     "zone_icon": "🟡",
     "zone_action": "暂停买入",
