@@ -803,17 +803,17 @@
     },
     {
       "date": "2026-09-20",
-      "price": 2628.56,
-      "indicator": 1.6321,
-      "zone_name": "止盈区",
-      "zone_icon": "🔴",
-      "zone_action": "分批卖出",
-      "zone_color": "#e74c3c"
+      "price": 2578.21,
+      "indicator": 1.5709,
+      "zone_name": "轻投区",
+      "zone_icon": "🔵",
+      "zone_action": "0.5倍定投, 小额分批",
+      "zone_color": "#3498db"
     }
   ],
   "config": {
     "coin": "ETH",
-    "last_update": "2026-09-20 00:46",
+    "last_update": "2026-09-20 05:50",
     "thresh_allin": 0.35,
     "thresh_heavy": 0.45,
     "thresh_dca": 0.65,
@@ -821,17 +821,17 @@
   },
   "latest": {
     "date": "2026-09-20",
-    "price": 2628.56,
-    "indicator": 1.6321,
-    "zone_name": "止盈区",
-    "zone_icon": "🔴",
-    "zone_action": "分批卖出",
-    "zone_color": "#e74c3c"
+    "price": 2578.21,
+    "indicator": 1.5709,
+    "zone_name": "轻投区",
+    "zone_icon": "🔵",
+    "zone_action": "0.5倍定投, 小额分批",
+    "zone_color": "#3498db"
   },
   "zone": {
-    "name": "止盈区",
-    "icon": "🔴",
-    "action": "分批卖出",
-    "color": "#e74c3c"
+    "name": "轻投区",
+    "icon": "🔵",
+    "action": "0.5倍定投, 小额分批",
+    "color": "#3498db"
   }
 }
