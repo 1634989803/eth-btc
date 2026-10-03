@@ -803,8 +803,8 @@
     },
     {
       "date": "2026-10-03",
-      "price": 2687.32,
-      "indicator": 1.6079,
+      "price": 2688.46,
+      "indicator": 1.6092,
       "zone_name": "止盈区",
       "zone_icon": "🔴",
       "zone_action": "分批卖出",
@@ -813,7 +813,7 @@
   ],
   "config": {
     "coin": "ETH",
-    "last_update": "2026-10-03 20:44",
+    "last_update": "2026-10-03 23:34",
     "thresh_allin": 0.35,
     "thresh_heavy": 0.45,
     "thresh_dca": 0.65,
@@ -821,8 +821,8 @@
   },
   "latest": {
     "date": "2026-10-03",
-    "price": 2687.32,
-    "indicator": 1.6079,
+    "price": 2688.46,
+    "indicator": 1.6092,
     "zone_name": "止盈区",
     "zone_icon": "🔴",
     "zone_action": "分批卖出",
