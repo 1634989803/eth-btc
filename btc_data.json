@@ -1,15 +1,6 @@
 {
   "history": [
     {
-      "date": "2026-08-07",
-      "price": 64885.9,
-      "indicator": 0.9691,
-      "zone_name": "定投区",
-      "zone_icon": "🟢",
-      "zone_action": "正常定投",
-      "zone_color": "#27ae60"
-    },
-    {
       "date": "2026-08-08",
       "price": 64941.8,
       "indicator": 0.9733,
@@ -809,19 +800,28 @@
       "zone_icon": "🟢",
       "zone_action": "正常定投",
       "zone_color": "#27ae60"
+    },
+    {
+      "date": "2026-11-05",
+      "price": 80548.3,
+      "indicator": 1.1477,
+      "zone_name": "定投区",
+      "zone_icon": "🟢",
+      "zone_action": "正常定投",
+      "zone_color": "#27ae60"
     }
   ],
   "config": {
     "coin": "BTC",
-    "last_update": "2026-11-04 23:21",
+    "last_update": "2026-11-05 05:41",
     "thresh_allin": 0.35,
     "thresh_heavy": 0.45,
     "thresh_dca": 0.65,
     "thresh_sell": 1.6
   },
   "latest": {
-    "date": "2026-11-04",
-    "price": 80486.0,
+    "date": "2026-11-05",
+    "price": 80548.3,
     "indicator": 1.1477,
     "zone_name": "定投区",
     "zone_icon": "🟢",
